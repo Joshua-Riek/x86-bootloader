@@ -2,6 +2,13 @@
 This minimal bootloader is currently able to find, load, and execute
 a program on any FAT12 formatted floppy or hard disk (including usb devices).
 
+Please note that the original max file size that the bootloader can load
+is 14kb, but this can be streached to around 20k before overflowing into
+the bottom of the bootloaders' stack, their are no checks in place to
+prevent this. If you wish to move around the memory map please be my
+guest and make it suitable for your needs.
+
+
 ## Features and Goals
 - [x] FAT12 floppy disk support
 - [x] FAT12 hard disk support
@@ -22,27 +29,20 @@ nasm -f bin boot12.asm -o boot12.bin
 ## Memory Map
 | Linear Address | Item                       |
 | -------------: | :-------------------------------- |
-|        0x100000 | Top of the memory hole |
-|        0x0F0000 | Video memory, MMIO, BIOS |
-|        0x0A0000 | Bottom of the memory hole |
-|        0x090000 | |
-|        0x010000 | |
-|        0x00F000 | |
-|        0x00E000 | Stage2 top of stack (0xf000) |
-|        0x00D000 | : |
-|        0x00C000 | Buffer location ends (0xc7ff) |
-|        0x00B000 | : |
-|        0x00A000 | : |
+|        0x00e000 | Stage2 stack 8k (top: 0xf000) |
+|        0x00d000 | : |
+|        0x00c000 | Disk buffer 18k (ends: 0xc7ff) |
+|        0x00b000 | : |
+|        0x00a000 | : |
 |        0x009000 | : |
-|        0x008000 | Buffer location starts (0x8000) |
+|        0x008000 | Disk buffer 18k (starts: 0x8000) |
 |        0x007000 | Boot location between  (0x7c00-0x7dff) |
-|        0x006000 | Boot top of stack (0x7000)|
+|        0x006000 | Boot stack 4k (top: 0x7000)|
 |        0x005000 | |
-|        0x004000 | Stage2 location ends (0x47ff) |
+|        0x004000 | Stage2 location 14k (ends: 0x47ff) |
 |        0x003000 | : |
 |        0x002000 | : |
-|        0x001000 | Stage2 location starts (0x1000) |
-        0x000000 | Reserved (Real Mode IVT, BDA) |
+|        0x001000 | Stage2 location 14k (starts: 0x1000) |
 
 ## Resources
 * [OSDev] Is a great website for any Hobby OS developer.
