@@ -11,11 +11,38 @@ a program on any FAT12 formatted floppy or hard disk (including usb devices).
 - [ ] FAT32 hard disk support
 - [ ] Works on any allowed FAT32 size
 
-## Memory Map
-TODO
+## Compiling
+Their are two ways that the bootloader can be compiled, you can either run
+`make` in the directory (on windows you must have a cross-compiller) or you
+can simply follow the example below.
+```batch
+nasm -f bin boot12.asm -o boot12.bin
+```
 
-# Compiling
-TODO
+## Memory Map
+| Linear Address | Item                       |
+| -------------: | :-------------------------------- |
+        0x100000 | Top of the memory hole |
+        0x0F0000 | Video memory, MMIO, BIOS |
+        0x0A0000 | Bottom of the memory hole |
+        0x090000 | |
+        0x010000 | |
+        0x00F000 | |
+        0x00E000 | Stage2 top of stack (0xf000) |
+        0x00D000 | : |
+        0x00C000 | Buffer location ends (0xc7ff) |
+        0x00B000 | : |
+        0x00A000 | : |
+        0x009000 | : |
+        0x008000 | Buffer location starts (0x8000) |
+        0x007000 | Boot location between  (0x7c00-0x7dff) |
+        0x006000 | Boot top of stack (0x7000)|
+        0x005000 | |
+        0x004000 | Stage2 location ends (0x47ff) |
+        0x003000 | : |
+        0x002000 | : |
+        0x001000 | Stage2 location starts (0x1000) |
+        0x000000 | Reserved (Real Mode IVT, BDA) |
 
 ## Resources
 * [OSDev] Is a great website for any Hobby OS developer.
