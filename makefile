@@ -44,8 +44,9 @@ endif
 .PHONY: all clean clobber
 
 # Rule to make targets
-all: $(OUTDIR)/boot12.bin $(OUTDIR)/demo.bin
+all: $(OUTDIR)/boot12.bin $(OUTDIR)/boot16.bin $(OUTDIR)/demo.bin
 
+# Makefile target for the FAT12 bootloader
 $(OUTDIR)/boot12.elf: $(OUTDIR)/boot12.o
 	$(LD) $^ $(LDFLAGS) -o $@
 
@@ -55,6 +56,17 @@ $(OUTDIR)/boot12.bin: $(OUTDIR)/boot12.elf
 $(OUTDIR)/boot12.o: boot12.asm | $(OUTDIR)
 	$(NASM) $^ $(NASMFLAGS) -o $@
 
+# Makefile target for the FAT16 bootloader
+$(OUTDIR)/boot16.elf: $(OUTDIR)/boot16.o
+	$(LD) $^ $(LDFLAGS) -o $@
+
+$(OUTDIR)/boot16.bin: $(OUTDIR)/boot16.elf
+	$(OBJCOPY) $^ $(OBJCOPYFLAGS) $@
+
+$(OUTDIR)/boot16.o: boot16.asm | $(OUTDIR)
+	$(NASM) $^ $(NASMFLAGS) -o $@
+
+# Makefile target for the demo file
 $(OUTDIR)/demo.bin: demo.asm | $(OUTDIR)
 	$(NASM) $^ -f bin -o $@
 

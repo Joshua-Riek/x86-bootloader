@@ -116,3 +116,6 @@ print:
     
     floppy db "Loaded on a floppy disk!", 0
     drive  db "Loaded on a hard drive!", 0
+   
+                times 0x2000 - ($ - $$) db 0x0f    ; Pad remainder of boot sector with zeros
+                           ; Boot signature

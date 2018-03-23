@@ -1,19 +1,26 @@
-# NASM Bootloader
-This minimal bootloader is currently able to find, load, and execute
-a program on any FAT12 formatted floppy or hard disk (including usb devices).
+## NASM Bootloaders
+A small collection of homemade bootloaders capable of finding, loading,
+then executing a program on a FAT12/16 formatted floppy or hard disk 
+(including USB and CDs). Typically, this would be used for a bootloader 
+for an operating system, second stage bootloader, or low level kernel.
 
-Please note that the original max file size that the bootloader can load
-is 14kb, but this can be streached to around 20k before overflowing into
-the bottom of the bootloaders' stack, their are no checks in place to
-prevent this. If you wish to move around the memory map please be my
-guest and make it suitable for your needs.
+#### Notes
+Please note that the max file size of a program that you may load is
+just about 20kb, this is before overflowing into the bootloader's stack,
+their are no checks in place to prevent this. If you wish to move around
+the memory map/location please be my guest and make it suitable for your needs.
 
+#### FAT12
+WIP
+
+#### FAT16
+WIP 
 
 ## Features and Goals
 - [x] FAT12 floppy disk support
 - [x] FAT12 hard disk support
 - [x] Works on any allowed FAT12 size
-- [ ] FAT16 hard disk support
+- [x] FAT16 hard disk support
 - [ ] Works on any allowed FAT16 size
 - [ ] FAT32 hard disk support
 - [ ] Works on any allowed FAT32 size
@@ -23,26 +30,8 @@ Their are two ways that the bootloader can be compiled, you can either run
 `make` in the directory (on windows you must have a cross-compiller) or you
 can simply follow the example below.
 ```batch
-nasm -f bin boot12.asm -o boot12.bin
+nasm -f bin foo.asm -o foo.bin
 ```
-
-## Memory Map
-| Linear Address | Item                       |
-| -------------: | :-------------------------------- |
-|        0x00e000 | Stage2 stack 8k (top: 0xf000) |
-|        0x00d000 | : |
-|        0x00c000 | Disk buffer 18k (ends: 0xc7ff) |
-|        0x00b000 | : |
-|        0x00a000 | : |
-|        0x009000 | : |
-|        0x008000 | Disk buffer 18k (starts: 0x8000) |
-|        0x007000 | Boot location between  (0x7c00-0x7dff) |
-|        0x006000 | Boot stack 4k (top: 0x7000)|
-|        0x005000 | |
-|        0x004000 | Stage2 location 14k (ends: 0x47ff) |
-|        0x003000 | : |
-|        0x002000 | : |
-|        0x001000 | Stage2 location 14k (starts: 0x1000) |
 
 ## Resources
 * [OSDev] Is a great website for any Hobby OS developer.
