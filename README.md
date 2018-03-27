@@ -1,20 +1,15 @@
 ## NASM Bootloaders
 A small collection of homemade bootloaders capable of finding, loading,
 then executing a program on a FAT12/16 formatted floppy or hard disk 
-(including USB and CDs). Typically, this would be used for a bootloader 
+(including USB and CDs). Typically, this would be used as a boot sector
 for an operating system, second stage bootloader, or low level kernel.
 
-#### Notes
-Please note that the max file size of a program that you may load is
-just about 20kb, this is before overflowing into the bootloader's stack,
-their are no checks in place to prevent this. If you wish to move around
-the memory map/location please be my guest and make it suitable for your needs.
+`fat12.asm` *Work In Progress*
 
-#### FAT12
-WIP
+`fat16.asm` is a FAT12/16 bootloader that supports both floppy and hard disk devices, with a maximum disk size of 1GB. This is due to using the BIOS interupt call [13h] service [02h] in support for older hardware. Please note that this may allocate up to 128KB of RAM in order to load the entire File Allocation Table (FAT) into memory; therefore, leaving approximately 400KB of conventional memory for loading your program or kernel.
 
-#### FAT16
-WIP 
+`fat16ext.asm` is the same exact thing as `fat16.asm` but uses the extended BIOS interupt call [13h] service [42h] that allows for a maximum disk size of 2GB under FAT16. The only problem is that some systems do not support interupt [13h] extensions.
+
 
 ## Features and Goals
 - [x] FAT12 floppy disk support
@@ -25,17 +20,9 @@ WIP
 - [ ] FAT32 hard disk support
 - [ ] Works on any allowed FAT32 size
 
-## Compiling
-Their are two ways that the bootloader can be compiled, you can either run
-`make` in the directory (on windows you must have a cross-compiller) or you
-can simply follow the example below.
-```batch
-nasm -f bin foo.asm -o foo.bin
-```
-
 ## Resources
 * [OSDev] Is a great website for any Hobby OS developer.
-* [NASM] Used for the bootloader.
+* [NASM] Assembler used to write the bootloader.
 * [imdisk] & [dd] To write the system files to a floppy image or hard disk.
 * [QEMU] Image emulator for testing the bootloader.
 
@@ -44,3 +31,7 @@ nasm -f bin foo.asm -o foo.bin
 [dd]:     http://uranus.chrysocome.net/linux/rawwrite/dd-old.htm
 [OSDev]:  http://wiki.osdev.org/Main_Page
 [NASM]:   http://www.nasm.us/index.php
+
+[13h]:    http://webpages.charter.net/danrollins/techhelp/0185.HTM
+[02h]:    http://webpages.charter.net/danrollins/techhelp/0188.HTM
+[42h]:    https://wiki.osdev.org/ATA_in_x86_RealMode_(BIOS)
