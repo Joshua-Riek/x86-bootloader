@@ -23,16 +23,16 @@
       %define BOOT_SEG 0x07c0                   ; which is only used for debugging
     %endif
 
-    %define STACK_SEG  0x0600                   ; (STACK_SEG * 0x10) + STACK_OFF = 0x7000
+    %define STACK_SEG  0x0600                   ; (STACK_SEG * 0x10)  + STACK_OFF  = 0x007000
     %define STACK_OFF  0x1000
 
-    %define BASE_SEG   0x0600                   ; (BASE_SEG * 0x10) + BASE_OFF = 0x7c00
+    %define BASE_SEG   0x0600                   ; (BASE_SEG * 0x10)   + BASE_OFF   = 0x007c00
     %define BASE_OFF   0x1c00
     
-    %define BUFFER_SEG 0x07c0                   ; (BUFFER_SEG * 0x10) + BUFFER_OFF = 0x8000
-    %define BUFFER_OFF 0x0400
+    %define BUFFER_SEG 0x1000                   ; (BUFFER_SEG * 0x10) + BUFFER_OFF = 0x010000
+    %define BUFFER_OFF 0x0000
 
-    %define LOAD_SEG   0x0100                   ; (LOAD_SEG * 0x10) + STAEG2_OFF = 0x1000
+    %define LOAD_SEG   0x4000                   ; (LOAD_SEG * 0x10)   + STAEG2_OFF = 0x040000
     %define LOAD_OFF   0x0000
 	
 ;---------------------------------------------------------------------
@@ -42,23 +42,30 @@
 ;       0x100000 | Top of memory hole
 ;       0x0f0000 | Video memory, MMIO, BIOS	
 ;       0x0a0000 | Bottom of memory hole
-;       0x090000 | 
-;       0x010000 | 
-;       0x00f000 | 
-;       0x00e000 | Load stack 8k         (top: 0xf000)
-;       0x00d000 |              :
-;       0x00c000 | Disk buffer 18k       (ends: 0xc7ff)
-;       0x00b000 |              :
-;       0x00a000 |              :
-;       0x009000 |              :
-;       0x008000 | Disk buffer 18k       (starts: 0x8000)
-; ====> 0x007000 | Boot location between (0x7c00-0x7dff)
-;       0x006000 | Boot stack 4k         (top: 0x7000)
+;       0x090000 |
+;       0x080000 |
+;       0x070000 |
+;       0x060000 |
+;       0x050000 |
+;       0x040000 | Load location ~400k (starts: 0x040000)   
+;       0x030000 | Disk buffer    128k (ends:   0x030000)
+;       0x020000 | 
+;       0x010000 | Disk buffer    128k (starts: 0x010000)
+;       0x00f000 | Load Stack       4k (top:    0x010000)
+;       0x00e000 |
+;       0x00d000 |
+;       0x00c000 |
+;       0x00b000 |
+;       0x00a000 |
+;       0x009000 |
+;       0x008000 |
+; ====> 0x007000 | Boot location   512b (start: 0x007c00)
+;       0x006000 | Boot stack        4k (top:   0x007000)
 ;       0x005000 |              
-;       0x004000 | Load location 14k     (ends: 0x47ff)
-;       0x003000 |              :
-;       0x002000 |              :
-;       0x001000 | Load location 14k     (starts: 0x1000)
+;       0x004000 |
+;       0x003000 |
+;       0x002000 |
+;       0x001000 |
 ;       0x000000 | Reserved (Real Mode IVT, BDA)
 ;---------------------------------------------------------------------
 
@@ -104,8 +111,8 @@ bootStrap:
     mov fs, ax
     
     mov bx, BUFFER_SEG                          ; NOTE: Must force the extra segment here, because when
-    mov es, bx                                  ; debugging with gdb, the flag -Ttext=0x7c00 adjusts segments
-    
+    mov es, bx                                  ; debugging with gdb, the flag -Ttext=0x7c00 adjusts all segments
+
     cli
     mov ax, STACK_SEG                           ; Get the the defined stack segment address
     mov ss, ax                                  ; Set segment register to the bottom  of the stack
@@ -157,7 +164,10 @@ loadRoot:
 ;---------------------------------------------------
     
 loadedRoot:
-    mov di, BUFFER_OFF                          ; Set es:di to the 18k disk buffer
+    mov ax, BOOT_SEG
+    mov ds, ax
+
+    mov di, BUFFER_OFF                          ; Set es:di to the 128k disk buffer
     
     mov cx, word [rootDirEntries]               ; Search through all of the root dir entrys for the kernel
     xor ax, ax                                  ; Clear ax for the file entry offset
@@ -217,8 +227,8 @@ loadedFat:
     mov gs, si                                  ; so i will just use the gs regsiter
     
     mov ax, LOAD_SEG
-    mov es, ax                                  ; Set es:bx to where the file will load (0x1000:0x0000)
-    xor bx, bx
+    mov es, ax                                  ; Set es:bx to where the file will load (0x4000:0x0000)
+    mov bx, LOAD_OFF
     
   loadFileSector:
     xor dx, dx
@@ -291,68 +301,73 @@ loadedFat:
 ; Bootloader routines below
 ;---------------------------------------------------
 
-
+    
 ;---------------------------------------------------
 readSectors:
 ;
 ; Read sectors starting at a given sector by 
-; the given times and load into a buffer.
+; the given times and load into a buffer. Please
+; note that this may allocate up to 128KB of ram.
 ;
 ; @param: CX => Number of sectors to read
 ; @param: AX => Starting sector
 ; @param: ES:BX => Buffer to read to
 ; @return: None
 ;
-;---------------------------------------------------
+;--------------------------------------------------
     pusha
-    
-    cmp cx, 126                                 ; Placing a sector read limit here of 126 sectors,
-    jle .sectorMain                             ; when attempting to read more than this you will
-    mov cx, 126                                 ; cause the boot shit to crash, so fuck you
-
-  .sectorMain:
-    mov di, 5                                   ; Try five times to read the sector
 
   .sectorLoop:
     pusha
-    push ax                                     ; Calculate absoluteSector
-    xor dx, dx                                  ; Prep ax:dx for output
-    div word [sectorsPerTrack]                  ; Divide LBA by SectorsPerTrack
-    inc dl                                      ; Add one to output
-    mov cl, dl                                  ; Move the absoluteSector to cl for int 13h
+    
+    xor dx, dx
+    div word [sectorsPerTrack]                  ; Divide the lba (value in ax) by sectorsPerTrack
+    mov cx, dx                                  ; Save the absolute sector value 
+    inc cx
 
-    pop ax                                      ; Calculate absoluteHead and absoluteTrack
-    xor dx, dx                                  ; Prep ax:dx for output
-    div word [sectorsPerTrack]                  ; Divide LBA by SectorsPerTrack
-    xor dx, dx                                  ; Prep ax:dx for output
-    div word [heads]                            ; Now divide by Heads
-    mov dh, dl                                  ; Move the absoluteHead to dh for int 13h
-    mov ch, al                                  ; Move the absoluteTrack to ch for int 13h
+    xor dx, dx                                  ; Divide by the number of heads
+    div word [heads]                            ; to get absolute head and track values
+    mov dh, dl                                  ; Move the absolute head into dh
+    
+    mov ch, al                                  ; Low 8 bits of absolute track
+    shl ah, 6                                   ; High 2 bits of absolute track
+    or cl, ah                                   ; Now cx is set with respective track and sector numbers
 
-    mov dl, byte [drive]                        ; Set correct device for int 13h
+    mov dl, byte [drive]                        ; Set correct drive for int 13h
+
+    mov di, 5                                   ; Try five times to read the sector
+    
+  .attemptRead:
     mov ax, 0x0201                              ; Read Sectors func of int 13h, read one sector
-
     int 0x13                                    ; Call int 13h (BIOS disk I/O)
-    jnc .sectorRead                             ; If no carry set, the sector has been read
+    jnc .readOk                                 ; If no carry set, the sector has been read
 
     xor ah, ah                                  ; Reset Drive func of int 13h
     int 0x13                                    ; Call int 13h (BIOS disk I/O)
-    popa
     
     dec di                                      ; Decrease read attempt counter
-
-    jnz .sectorLoop                             ; Try to read the sector again
+    jnz .attemptRead                            ; Try to read the sector again
     jmp reboot
 
-  .sectorRead:
+  .readOk:
     popa
-    add bx, word [bytesPerSector]               ; Add to the buffer address for the next sector
     inc ax                                      ; Increase the next sector to read
-    loop .sectorMain                            ; Read next sector for cx times
+    add bx, word [bytesPerSector]               ; Add to the buffer address for the next sector
+    
+    jnc .nextSector 
+
+  .fixBuffer:                                   ; An error will occur if the buffer in memory
+    mov dx, es                                  ; overlaps a 64k page boundry, when bx overflows
+    add dh, 0x10                                ; it will trigger the carry flag, so correct
+    mov es, dx                                  ; es segment by 0x1000
+
+  .nextSector:
+    loop .sectorLoop                            ; Read the next sector for cx times
 
     popa
     ret
 
+    
 ;---------------------------------------------------
 reboot:
 ;

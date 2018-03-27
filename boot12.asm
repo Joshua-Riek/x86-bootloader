@@ -17,7 +17,6 @@
 ;  along with this program.  If not, see <http://www.gnu.org/licenses/>.
 ;
     
-    
     %ifidn __OUTPUT_FORMAT__, elf32
       %define BOOT_SEG 0x0000                   ; Set the bootloader segments to zero when
     %else                                       ; the elf format is used (compiled with -Ttext=0x7c00),
