@@ -81,12 +81,6 @@ $(OUTDIR):
 install:
 	dd if=obj/boot16.bin of=floppy.img bs=1 skip=62 seek=62
 
-floppy:
-	imdisk -a -f floppy.img -s 1440K -m B: -p "/fs:fat /q /y"
-	cp obj/demo.bin /b/
-	imdisk -D -m B:
-	dd if=obj/boot16.bin of=floppy.img bs=1 skip=62 seek=62
-
 
 # Clean produced files
 clean:

@@ -1,6 +1,6 @@
 ;  boot12.asm
 ;
-;  This FAT12 bootlader is currently configured for a 1440k floppy disk   
+;  This program is a FAT12 bootloader
 ;  Copyright (c) 2017-2018, Joshua Riek
 ;
 ;  This program is free software: you can redistribute it and/or modify
@@ -16,19 +16,19 @@
 ;  You should have received a copy of the GNU General Public License
 ;  along with this program.  If not, see <http://www.gnu.org/licenses/>.
 ;
-
+    
     %define BOOT_SEG   0x07c0                   ; (BOOT_SEG   << 4) + BOOT_OFF   = 0x007c00
     %define BOOT_OFF   0x0000
-  
+
     %define STACK_SEG  0x0600                   ; (STACK_SEG  << 4) + STACK_OFF  = 0x007000
     %define STACK_OFF  0x1000
-    
+
     %define BUFFER_SEG 0x1000                   ; (BUFFER_SEG << 4) + BUFFER_OFF = 0x010000
     %define BUFFER_OFF 0x0000
 
-    %define LOAD_SEG   0x4000                   ; (LOAD_SEG   << 4) + STAEG2_OFF = 0x040000
+    %define LOAD_SEG   0x4000                   ; (LOAD_SEG   << 4) + LOAD_OFF   = 0x040000
     %define LOAD_OFF   0x0000
-
+	
 ;---------------------------------------------------------------------
 ; Bootloader Memory Map
 ;---------------------------------------------------------------------
@@ -63,36 +63,37 @@
 ;       0x000000 | Reserved (Real Mode IVT, BDA)
 ;---------------------------------------------------------------------
 
+
     bits 16
  
 ;---------------------------------------------------
 ; Disk description table
 ;---------------------------------------------------
 
-global _start
-_start:
-    jmp short entryPoint                         ; Jump over OEM / BIOS param block
+    jmp short entryPoint                        ; Jump over OEM / BIOS param block
     nop
 
-    OEMName           db "CUCK ME "             ; Disk label
-    bytesPerSector    dw 512                    ; Bytes per sector
-    sectorsPerCluster db 1                      ; Sectors per cluster
-    reservedSectors   dw 1                      ; Reserved sectors
-    fats              db 2                      ; Number of fats
-    rootDirEntries    dw 224                    ; Number of entries in root dir
-    sectors           dw 2880                   ; Logical sectors
-    mediaType         db 0xf0                   ; Media descriptor byte
-    fatSectors        dw 9                      ; Sectors per FAT
-    sectorsPerTrack   dw 18                     ; Sectors per track
-    heads             dw 2                      ; Number of sides/heads
-    hiddenSectors     dd 0                      ; Hidden sectors
-    hugeSectors       dd 0                      ; LBA sectors
-    biosDriveNum      db 0                      ; Drive number
-    reserved          db 0                      ; This is not used
-    bootSignature     db 41                     ; Drive signature
-    volumeId          dd 0xdeadbeef             ; Volume ID
-    volumeLabel       db "           "          ; Volume Label
-    fatTypeLabel      db "FAT12   "             ; File system type
+    %define OEMName           bp+0x03           ; Disk label
+    %define bytesPerSector    bp+0x0b           ; Bytes per sector
+    %define sectorsPerCluster bp+0x0d           ; Sectors per cluster
+    %define reservedSectors   bp+0x0e           ; Reserved sectors
+    %define fats              bp+0x10           ; Number of fats
+    %define rootDirEntries    bp+0x11           ; Number of entries in root dir
+    %define sectors           bp+0x13           ; Logical sectors
+    %define mediaType         bp+0x15           ; Media descriptor byte
+    %define fatSectors        bp+0x16           ; Sectors per FAT
+    %define sectorsPerTrack   bp+0x18           ; Sectors per track
+    %define heads             bp+0x1a           ; Number of sides/heads
+    %define hiddenSectors     bp+0x1c           ; Hidden sectors
+    %define hugeSectors       bp+0x20           ; LBA sectors
+    %define biosDriveNum      bp+0x24           ; Drive number
+    %define reserved          bp+0x25           ; This is not used
+    %define bootSignature     bp+0x26           ; Drive signature
+    %define volumeId          bp+0x27           ; Volume ID
+    %define volumeLabel       bp+0x2b           ; Volume Label
+    %define fatTypeLabel      bp+0x36           ; File system type
+    
+    times 0x3b db 0x00
 
 ;---------------------------------------------------
 ; Start of the main bootloader code and entry point
@@ -104,19 +105,22 @@ entryPoint:
 bootStrap:
     mov ax, BOOT_SEG                            ; Set segments to the location of the bootloader
     mov ds, ax
-
+    mov es, ax
+    
     cli
     mov ax, STACK_SEG                           ; Get the the defined stack segment address
     mov ss, ax                                  ; Set segment register to the bottom  of the stack
     mov sp, STACK_OFF                           ; Set ss:sp to the top of the 4k stack
     sti
     
+    mov bp, (BOOT_SEG-STACK_SEG) << 4           ; Correct bp for the disk description table
+
     or dl, dl                                   ; When booting from a hard drive, some of the 
     jz loadRoot                                 ; you need to call int 13h to fix some bpb entries
 
     mov byte [drive], dl                        ; Save boot device number
 
-    mov ah, 8                                   ; Get Drive Parameters func of int 13h
+    mov ah, 0x08                                ; Get Drive Parameters func of int 13h
     int 0x13                                    ; Call int 13h (BIOS disk I/O)
     jc loadRoot
 
@@ -198,14 +202,25 @@ loadFat:
     call readSectors                            ; Read the sectors
 
 ;---------------------------------------------------
+; Calculate the total number of clusters to dertermine fat type
+;---------------------------------------------------
+    
+fatType:
+    mov bx, word [sectors]                      ; Take the total sectors subtracted
+    sub bx, word [userData]                     ; by the start of the data sectors
+    div word [sectorsPerCluster]                ; Now divide by the sectors per cluster
+    
+    mov word [totalClusters], bx                ; Save the value for later 
+    
+;---------------------------------------------------
 ; Load the clusters of the file and jump to it
 ;---------------------------------------------------
     
-loadedFat:
+loadedFat:    
     mov ax, LOAD_SEG
     mov es, ax                                  ; Set es:bx to where the file will load (0x4000:0x0000)
     mov bx, LOAD_OFF
-
+    
   loadFileSector:
     xor dx, dx
     xor cx, cx
@@ -222,16 +237,25 @@ loadedFat:
     mov es, bx                                  ; Point es:bx to where we will load
     mov bx, word [pointer]                      ; Increase the buffer by the pointer offset
     call readSectors                            ; Read the sectors
-  
+
     mov ax, word [cluster]                      ; Current cluster number
-    xor dx, dx   
-  
-  calculateNextSector:                          ; Get the next sector for FAT12 (cluster + (cluster * 1.5))
+    xor dx, dx
+    
+    cmp word [totalClusters], 4085              ; Calculate the next FAT12 or FAT16 sector c:
+    jl calculateNextSector12
+    
+  calculateNextSector16:                        ; Get the next sector for FAT16 (cluster * 2)
+    mov bx, 2                                   ; Multiply the cluster by two (cluster is in ax)
+    mul bx
+
+    jmp loadNextSector
+    
+  calculateNextSector12:                        ; Get the next sector for FAT12 (cluster + (cluster * 1.5))
     mov bx, 3                                   ; We want to multiply by 1.5 so divide by 3/2 
     mul bx                                      ; Multiply the cluster by the numerator
     mov bx, 2                                   ; Return value in ax and remainder in dx
     div bx                                      ; Divide the cluster by the denominator
-
+   
   loadNextSector:
     push ds
 
@@ -241,7 +265,7 @@ loadedFat:
 
     add si, ax                                  ; Point to the next cluster in the FAT entry
     mov ax, word [ds:si]                        ; Load ax to the next cluster in FAT
-
+    
     pop ds
 
     or dx, dx                                   ; Is the cluster caluclated even?
@@ -265,47 +289,49 @@ loadedFat:
 
   fileJump:
     mov dl, byte [drive]                        ; We still need the boot device info
-    jmp LOAD_SEG:LOAD_OFF                   ; Jump to the file loaded!
+    jmp LOAD_SEG:LOAD_OFF                       ; Jump to the file loaded!
 
-    hlt                                         ; This should never be hit
+    hlt                                         ; This should never be hit 
 
 
 ;---------------------------------------------------
 ; Bootloader routines below
 ;---------------------------------------------------
 
-
+  
 ;---------------------------------------------------
 readSectors:
 ;
 ; Read sectors starting at a given sector by 
-; the given times and load into a buffer.
+; the given times and load into a buffer. Please
+; note that this may allocate up to 128KB of ram.
 ;
 ; @param: CX => Number of sectors to read
 ; @param: AX => Starting sector
 ; @param: ES:BX => Buffer to read to
 ; @return: None
 ;
-;---------------------------------------------------
+;--------------------------------------------------
     pusha
-
+    push es
+    
   .sectorLoop:
     pusha
-    push ax                                     ; Calculate absoluteSector
-    xor dx, dx                                  ; Prep ax:dx for output
-    div word [sectorsPerTrack]                  ; Divide LBA by SectorsPerTrack
-    inc dl                                      ; Add one to output
-    mov cl, dl                                  ; Move the absoluteSector to cl for int 13h
+    
+    xor dx, dx
+    div word [sectorsPerTrack]                  ; Divide the lba (value in ax) by sectorsPerTrack
+    mov cx, dx                                  ; Save the absolute sector value 
+    inc cx
 
-    pop ax                                      ; Calculate absoluteHead and absoluteTrack
-    xor dx, dx                                  ; Prep ax:dx for output
-    div word [sectorsPerTrack]                  ; Divide LBA by SectorsPerTrack
-    xor dx, dx                                  ; Prep ax:dx for output
-    div word [heads]                            ; Now divide by Heads
-    mov dh, dl                                  ; Move the absoluteHead to dh for int 13h
-    mov ch, al                                  ; Move the absoluteTrack to ch for int 13h
+    xor dx, dx                                  ; Divide by the number of heads
+    div word [heads]                            ; to get absolute head and track values
+    mov dh, dl                                  ; Move the absolute head into dh
+    
+    mov ch, al                                  ; Low 8 bits of absolute track
+    shl ah, 6                                   ; High 2 bits of absolute track
+    or cl, ah                                   ; Now cx is set with respective track and sector numbers
 
-    mov dl, byte [drive]                        ; Set correct device for int 13h
+    mov dl, byte [drive]                        ; Set correct drive for int 13h
 
     mov di, 5                                   ; Try five times to read the sector
     
@@ -326,10 +352,20 @@ readSectors:
     
   .readOk:
     popa
-    add bx, word [bytesPerSector]               ; Add to the buffer address for the next sector
     inc ax                                      ; Increase the next sector to read
-    loop .sectorLoop                            ; Read next sector for cx times
+    add bx, word [bytesPerSector]               ; Add to the buffer address for the next sector
+    
+    jnc .nextSector 
 
+  .fixBuffer:                                   ; An error will occur if the buffer in memory
+    mov dx, es                                  ; overlaps a 64k page boundry, when bx overflows
+    add dh, 0x10                                ; it will trigger the carry flag, so correct
+    mov es, dx                                  ; es segment by 0x1000
+
+  .nextSector:
+    loop .sectorLoop                            ; Read the next sector for cx times
+
+    pop es
     popa
     ret
 
@@ -372,14 +408,16 @@ print:
 ;---------------------------------------------------
 
 
-    filename       db "DEMO    BIN"             ; Kernel/Stage2 bootloader filename 
+    filename       db "DEMO    BIN"             ; Kernel/Stage2 filename 
+
     fileNotFound   db "File not found!", 13, 10, 0
     diskError      db "Disk error!", 13, 10, 0
-
+    
     userData       dw 0                         ; Start of the data sectors
     drive          db 0                         ; Boot device number
     cluster        dw 0                         ; Cluster of the file that is being loaded
     pointer        dw 0                         ; Pointer into Buffer, for loading the file
+    totalClusters  dw 0                         ; Total clusters, used to determine FAT type
 
-                   times 510 - ($ - $$) db 0x0  ; Pad remainder of boot sector with zeros
+                   times 510 - ($ - $$) db 0x00 ; Pad remainder of boot sector with zeros
                    dw 0xaa55                    ; Boot signature
