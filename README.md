@@ -6,17 +6,14 @@ for an operating system, second stage bootloader, or low level kernel.
 
 `fat12.asm` *Work In Progress*
 
-`fat16.asm` is a FAT12/16 bootloader that supports both floppy and hard disk devices, with a maximum disk size of 1GB. This is due to using the BIOS interupt call [13h] service [02h] in support for older hardware. Please note that this may allocate up to 128KB of RAM in order to load the entire File Allocation Table (FAT) into memory; therefore, leaving approximately 400KB of conventional memory for loading your program or kernel.
-
-`fat16ext.asm` is the same exact thing as `fat16.asm` but uses the extended BIOS interupt call [13h] service [42h] that allows for a maximum disk size of 2GB under FAT16. The only problem is that some systems do not support interupt [13h] extensions.
-
+`fat16.asm` is a FAT12/16 bootloader that supports both floppy and hard disk devices, with a maximum disk size of 1GB. This is due to using the BIOS interrupt call [13h] service [02h] in support for older hardware. Please note that this may allocate up to 128KB of RAM in order to load the entire File Allocation Table (FAT) into memory; therefore, leaving approximately 400KB of conventional memory for loading your program or kernel.
 
 ## Features and Goals
 - [x] FAT12 floppy disk support
 - [x] FAT12 hard disk support
 - [x] Works on any allowed FAT12 size
 - [x] FAT16 hard disk support
-- [ ] Works on any allowed FAT16 size
+- [x] Works on any allowed FAT16 size
 - [ ] FAT32 hard disk support
 - [ ] Works on any allowed FAT32 size
 

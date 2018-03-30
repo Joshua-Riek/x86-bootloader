@@ -30,9 +30,11 @@ OUTDIR        = obj
 CFLAGS       +=
 LDFLAGS      +=
 ARFLAGS      +=
-LDFLAGS      += -m elf_i386 -Ttext=0x7c00
+LDFLAGS      += -m elf_i386 -Ttext=0x00000
 NASMFLAGS    += -f elf32 -g3 -F dwarf
 OBJCOPYFLAGS += -O binary
+
+FIXTEXTFLAGS += --change-section-vma
 
 # For Windows compatibility (I recomend using a i686-elf cross-compiler)
 ifeq ($(OS), Windows_NT)
@@ -40,6 +42,7 @@ ifeq ($(OS), Windows_NT)
   LD         := i686-elf-ld
   AR         := i686-elf-ar 
 endif
+
 
 .PHONY: all clean clobber
 
@@ -50,25 +53,26 @@ all: $(OUTDIR)/boot12.bin $(OUTDIR)/boot16.bin $(OUTDIR)/demo.bin
 $(OUTDIR)/boot12.elf: $(OUTDIR)/boot12.o
 	$(LD) $^ $(LDFLAGS) -o $@
 
-$(OUTDIR)/boot12.bin: $(OUTDIR)/boot12.elf
-	$(OBJCOPY) $^ $(OBJCOPYFLAGS) $@
-
 $(OUTDIR)/boot12.o: boot12.asm | $(OUTDIR)
 	$(NASM) $^ $(NASMFLAGS) -o $@
 
+$(OUTDIR)/boot12.bin: $(OUTDIR)/boot12.elf
+	$(OBJCOPY) $^ $(OBJCOPYFLAGS) $@ | $(OBJCOPY) $^ $(FIXTEXTFLAGS) .text=0x7c00
+
 # Makefile target for the FAT16 bootloader
+$(OUTDIR)/boot16.o: boot16.asm | $(OUTDIR)
+	$(NASM) $^ $(NASMFLAGS) -o $@
+
 $(OUTDIR)/boot16.elf: $(OUTDIR)/boot16.o
 	$(LD) $^ $(LDFLAGS) -o $@
 
 $(OUTDIR)/boot16.bin: $(OUTDIR)/boot16.elf
-	$(OBJCOPY) $^ $(OBJCOPYFLAGS) $@
-
-$(OUTDIR)/boot16.o: boot16.asm | $(OUTDIR)
-	$(NASM) $^ $(NASMFLAGS) -o $@
+	$(OBJCOPY) $^ $(OBJCOPYFLAGS) $@ | $(OBJCOPY) $^ $(FIXTEXTFLAGS) .text=0x7c00
 
 # Makefile target for the demo file
 $(OUTDIR)/demo.bin: demo.asm | $(OUTDIR)
 	$(NASM) $^ -f bin -o $@
+
 
 # Create the output folder
 $(OUTDIR):
@@ -82,6 +86,7 @@ floppy:
 	cp obj/demo.bin /b/
 	imdisk -D -m B:
 	dd if=obj/boot16.bin of=floppy.img bs=1 skip=62 seek=62
+
 
 # Clean produced files
 clean:

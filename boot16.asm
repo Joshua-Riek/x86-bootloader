@@ -17,22 +17,16 @@
 ;  along with this program.  If not, see <http://www.gnu.org/licenses/>.
 ;
     
-    %ifidn __OUTPUT_FORMAT__, elf32
-      %define BOOT_SEG 0x0000                   ; Set the bootloader segments to zero when
-    %else                                       ; the elf format is used (compiled with -Ttext=0x7c00),
-      %define BOOT_SEG 0x07c0                   ; which is only used for debugging
-    %endif
+    %define BOOT_SEG   0x07c0                   ; (BOOT_SEG   << 4) + BOOT_OFF   = 0x007c00
+    %define BOOT_OFF   0x0000
 
-    %define STACK_SEG  0x0600                   ; (STACK_SEG * 0x10)  + STACK_OFF  = 0x007000
+    %define STACK_SEG  0x0600                   ; (STACK_SEG  << 4) + STACK_OFF  = 0x007000
     %define STACK_OFF  0x1000
 
-    %define BASE_SEG   0x0600                   ; (BASE_SEG * 0x10)   + BASE_OFF   = 0x007c00
-    %define BASE_OFF   0x1c00
-    
-    %define BUFFER_SEG 0x1000                   ; (BUFFER_SEG * 0x10) + BUFFER_OFF = 0x010000
+    %define BUFFER_SEG 0x1000                   ; (BUFFER_SEG << 4) + BUFFER_OFF = 0x010000
     %define BUFFER_OFF 0x0000
 
-    %define LOAD_SEG   0x4000                   ; (LOAD_SEG * 0x10)   + STAEG2_OFF = 0x040000
+    %define LOAD_SEG   0x4000                   ; (LOAD_SEG   << 4) + LOAD_OFF   = 0x040000
     %define LOAD_OFF   0x0000
 	
 ;---------------------------------------------------------------------
@@ -69,15 +63,16 @@
 ;       0x000000 | Reserved (Real Mode IVT, BDA)
 ;---------------------------------------------------------------------
 
+
     bits 16
  
 ;---------------------------------------------------
 ; Disk description table
 ;---------------------------------------------------
 
-    jmp short bootStrap                         ; Jump over OEM / BIOS param block
+    jmp short entryPoint                        ; Jump over OEM / BIOS param block
     nop
-    
+
     %define OEMName           bp+0x03           ; Disk label
     %define bytesPerSector    bp+0x0b           ; Bytes per sector
     %define sectorsPerCluster bp+0x0d           ; Sectors per cluster
@@ -103,30 +98,29 @@
 ;---------------------------------------------------
 ; Start of the main bootloader code and entry point
 ;---------------------------------------------------
+
+entryPoint:
+    jmp BOOT_SEG:$+5                            ; Fix the cs:ip registers
     
 bootStrap:
     mov ax, BOOT_SEG                            ; Set segments to the location of the bootloader
     mov ds, ax
-    mov gs, ax
-    mov fs, ax
+    mov es, ax
     
-    mov bx, BUFFER_SEG                          ; NOTE: Must force the extra segment here, because when
-    mov es, bx                                  ; debugging with gdb, the flag -Ttext=0x7c00 adjusts all segments
-
     cli
     mov ax, STACK_SEG                           ; Get the the defined stack segment address
     mov ss, ax                                  ; Set segment register to the bottom  of the stack
     mov sp, STACK_OFF                           ; Set ss:sp to the top of the 4k stack
     sti
-
-    mov bp, BASE_OFF                            ; Correct bp for the disk description table
     
+    mov bp, (BOOT_SEG-STACK_SEG) << 4           ; Correct bp for the disk description table
+
     or dl, dl                                   ; When booting from a hard drive, some of the 
     jz loadRoot                                 ; you need to call int 13h to fix some bpb entries
 
     mov byte [drive], dl                        ; Save boot device number
 
-    mov ah, 8                                   ; Get Drive Parameters func of int 13h
+    mov ah, 0x08                                ; Get Drive Parameters func of int 13h
     int 0x13                                    ; Call int 13h (BIOS disk I/O)
     jc loadRoot
 
@@ -155,6 +149,9 @@ loadRoot:
 
     mov word [userData], ax                     ; start of user data = startOfRoot + numberOfRoot
     add word [userData], cx                     ; Therefore, just add the size and location of the root directory
+    
+    mov bx, BUFFER_SEG                          ; Set the extra segment to the disk buffer
+    mov es, bx
 
     mov bx, BUFFER_OFF                          ; Set es:bx and load the root directory into the disk buffer
     call readSectors                            ; Read the sectors
@@ -164,10 +161,7 @@ loadRoot:
 ;---------------------------------------------------
     
 loadedRoot:
-    mov ax, BOOT_SEG
-    mov ds, ax
-
-    mov di, BUFFER_OFF                          ; Set es:di to the 128k disk buffer
+    mov di, BUFFER_OFF                          ; Set es:di to the 18k disk buffer
     
     mov cx, word [rootDirEntries]               ; Search through all of the root dir entrys for the kernel
     xor ax, ax                                  ; Clear ax for the file entry offset
@@ -189,7 +183,7 @@ loadedRoot:
     call print
     jmp reboot
     
-;--------------------------------------------------
+;---------------------------------------------------
 ; Load the fat from the found file   
 ;--------------------------------------------------
 
@@ -222,10 +216,7 @@ fatType:
 ; Load the clusters of the file and jump to it
 ;---------------------------------------------------
     
-loadedFat:
-    mov si, BUFFER_SEG                          ; The ds register is ebing used by the local vars,
-    mov gs, si                                  ; so i will just use the gs regsiter
-    
+loadedFat:    
     mov ax, LOAD_SEG
     mov es, ax                                  ; Set es:bx to where the file will load (0x4000:0x0000)
     mov bx, LOAD_OFF
@@ -250,8 +241,7 @@ loadedFat:
     mov ax, word [cluster]                      ; Current cluster number
     xor dx, dx
     
-    mov bx, word [totalClusters]
-    cmp bx, 4085                                ; Calculate the next FAT12 or FAT16 sector c:
+    cmp word [totalClusters], 4085              ; Calculate the next FAT12 or FAT16 sector c:
     jl calculateNextSector12
     
   calculateNextSector16:                        ; Get the next sector for FAT16 (cluster * 2)
@@ -267,9 +257,16 @@ loadedFat:
     div bx                                      ; Divide the cluster by the denominator
    
   loadNextSector:
-    mov si, BUFFER_OFF                          ; Get the fat entry in gs:si
+    push ds
+
+    mov si, BUFFER_SEG
+    mov ds, si                                  ; Tempararly set ds:si to the buffer
+    mov si, BUFFER_OFF
+
     add si, ax                                  ; Point to the next cluster in the FAT entry
-    mov ax, word [gs:si]                        ; Load ax to the next cluster in FAT
+    mov ax, word [ds:si]                        ; Load ax to the next cluster in FAT
+    
+    pop ds
 
     or dx, dx                                   ; Is the cluster caluclated even?
     jz evenSector
@@ -294,14 +291,14 @@ loadedFat:
     mov dl, byte [drive]                        ; We still need the boot device info
     jmp LOAD_SEG:LOAD_OFF                       ; Jump to the file loaded!
 
-    hlt                                         ; This should never be hit
+    hlt                                         ; This should never be hit 
 
 
 ;---------------------------------------------------
 ; Bootloader routines below
 ;---------------------------------------------------
 
-    
+  
 ;---------------------------------------------------
 readSectors:
 ;
@@ -316,7 +313,8 @@ readSectors:
 ;
 ;--------------------------------------------------
     pusha
-
+    push es
+    
   .sectorLoop:
     pusha
     
@@ -347,8 +345,11 @@ readSectors:
     
     dec di                                      ; Decrease read attempt counter
     jnz .attemptRead                            ; Try to read the sector again
-    jmp reboot
 
+    mov si, diskError                           ; Error reading the disk
+    call print
+    jmp reboot
+    
   .readOk:
     popa
     inc ax                                      ; Increase the next sector to read
@@ -364,10 +365,10 @@ readSectors:
   .nextSector:
     loop .sectorLoop                            ; Read the next sector for cx times
 
+    pop es
     popa
     ret
 
-    
 ;---------------------------------------------------
 reboot:
 ;
@@ -407,9 +408,11 @@ print:
 ;---------------------------------------------------
 
 
-    filename       db "DEMO    BIN"             ; Kernel/Stage2 bootloader filename 
-    fileNotFound   db "File not found!", 0
+    filename       db "DEMO    BIN"             ; Kernel/Stage2 filename 
 
+    fileNotFound   db "File not found!", 13, 10, 0
+    diskError      db "Disk error!", 13, 10, 0
+    
     userData       dw 0                         ; Start of the data sectors
     drive          db 0                         ; Boot device number
     cluster        dw 0                         ; Cluster of the file that is being loaded

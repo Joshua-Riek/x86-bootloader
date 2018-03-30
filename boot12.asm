@@ -16,22 +16,19 @@
 ;  You should have received a copy of the GNU General Public License
 ;  along with this program.  If not, see <http://www.gnu.org/licenses/>.
 ;
-    
-    %ifidn __OUTPUT_FORMAT__, elf32
-      %define BOOT_SEG 0x0000                   ; Set the bootloader segments to zero when
-    %else                                       ; the elf format is used (compiled with -Ttext=0x7c00),
-      %define BOOT_SEG 0x07c0                   ; which is only used for debugging
-    %endif
 
-    %define STACK_SEG  0x0600                   ; (STACK_SEG * 0x10) + STACK_OFF = 0x7000
+    %define BOOT_SEG   0x07c0                   ; (BOOT_SEG   << 4) + BOOT_OFF   = 0x007c00
+    %define BOOT_OFF   0x0000
+  
+    %define STACK_SEG  0x0600                   ; (STACK_SEG  << 4) + STACK_OFF  = 0x007000
     %define STACK_OFF  0x1000
+    
+    %define BUFFER_SEG 0x1000                   ; (BUFFER_SEG << 4) + BUFFER_OFF = 0x010000
+    %define BUFFER_OFF 0x0000
 
-    %define BUFFER_SEG 0x07c0                   ; (BUFFER_SEG * 0x10) + BUFFER_OFF = 0x8000
-    %define BUFFER_OFF 0x0400
-
-    %define LOAD_SEG   0x0100                   ; (LOAD_SEG * 0x10) + STAEG2_OFF = 0x1000
+    %define LOAD_SEG   0x4000                   ; (LOAD_SEG   << 4) + STAEG2_OFF = 0x040000
     %define LOAD_OFF   0x0000
-	
+
 ;---------------------------------------------------------------------
 ; Bootloader Memory Map
 ;---------------------------------------------------------------------
@@ -39,23 +36,30 @@
 ;       0x100000 | Top of memory hole
 ;       0x0f0000 | Video memory, MMIO, BIOS	
 ;       0x0a0000 | Bottom of memory hole
-;       0x090000 | 
-;       0x010000 | 
-;       0x00f000 | 
-;       0x00e000 | Load stack 8k         (top: 0xf000)
-;       0x00d000 |              :
-;       0x00c000 | Disk buffer 18k       (ends: 0xc7ff)
-;       0x00b000 |              :
-;       0x00a000 |              :
-;       0x009000 |              :
-;       0x008000 | Disk buffer 18k       (starts: 0x8000)
-; ====> 0x007000 | Boot location between (0x7c00-0x7dff)
-;       0x006000 | Boot stack 4k         (top: 0x7000)
+;       0x090000 |
+;       0x080000 |
+;       0x070000 |
+;       0x060000 |
+;       0x050000 |
+;       0x040000 | Load location ~400k (starts: 0x040000)   
+;       0x030000 | Disk buffer    128k (ends:   0x030000)
+;       0x020000 | 
+;       0x010000 | Disk buffer    128k (starts: 0x010000)
+;       0x00f000 | Load Stack       4k (top:    0x010000)
+;       0x00e000 |
+;       0x00d000 |
+;       0x00c000 |
+;       0x00b000 |
+;       0x00a000 |
+;       0x009000 |
+;       0x008000 |
+; ====> 0x007000 | Boot location   512b (start: 0x007c00)
+;       0x006000 | Boot stack        4k (top:   0x007000)
 ;       0x005000 |              
-;       0x004000 | Load location 14k     (ends: 0x47ff)
-;       0x003000 |              :
-;       0x002000 |              :
-;       0x001000 | Load location 14k     (starts: 0x1000)
+;       0x004000 |
+;       0x003000 |
+;       0x002000 |
+;       0x001000 |
 ;       0x000000 | Reserved (Real Mode IVT, BDA)
 ;---------------------------------------------------------------------
 
@@ -65,7 +69,9 @@
 ; Disk description table
 ;---------------------------------------------------
 
-    jmp short bootStrap                         ; Jump over OEM / BIOS param block
+global _start
+_start:
+    jmp short entryPoint                         ; Jump over OEM / BIOS param block
     nop
 
     OEMName           db "CUCK ME "             ; Disk label
@@ -91,16 +97,14 @@
 ;---------------------------------------------------
 ; Start of the main bootloader code and entry point
 ;---------------------------------------------------
+
+entryPoint:
+    jmp BOOT_SEG:$+5                            ; Fix the cs:ip registers
     
 bootStrap:
     mov ax, BOOT_SEG                            ; Set segments to the location of the bootloader
     mov ds, ax
-    mov gs, ax
-    mov fs, ax
-    
-    mov bx, BUFFER_SEG                          ; NOTE: Must force the extra segment here, because when
-    mov es, bx                                  ; debugging with gdb, the flag -Ttext=0x7c00 adjusts segments
-    
+
     cli
     mov ax, STACK_SEG                           ; Get the the defined stack segment address
     mov ss, ax                                  ; Set segment register to the bottom  of the stack
@@ -120,7 +124,7 @@ bootStrap:
     mov word [sectorsPerTrack], cx              ; And whose low 8 bits are in ch
 
     movzx dx, dh                                ; Convert the maximum head number to a word
-    add dx, 1                                   ; Head numbers start at zero, so add one
+    inc dx                                      ; Head numbers start at zero, so add one
     mov word [heads], dx                        ; Save the head number
     
 ;---------------------------------------------------
@@ -141,6 +145,9 @@ loadRoot:
 
     mov word [userData], ax                     ; start of user data = startOfRoot + numberOfRoot
     add word [userData], cx                     ; Therefore, just add the size and location of the root directory
+    
+    mov bx, BUFFER_SEG                          ; Set the extra segment to the disk buffer
+    mov es, bx
 
     mov bx, BUFFER_OFF                          ; Set es:bx and load the root directory into the disk buffer
     call readSectors                            ; Read the sectors
@@ -195,13 +202,10 @@ loadFat:
 ;---------------------------------------------------
     
 loadedFat:
-    mov si, BUFFER_SEG                          ; The ds register is ebing used by the local vars,
-    mov gs, si                                  ; so i will just use the gs regsiter
-    
     mov ax, LOAD_SEG
-    mov es, ax                                  ; Set es:bx to where the file will load (0x1000:0x0000)
-    xor bx, bx
-    
+    mov es, ax                                  ; Set es:bx to where the file will load (0x4000:0x0000)
+    mov bx, LOAD_OFF
+
   loadFileSector:
     xor dx, dx
     xor cx, cx
@@ -213,22 +217,32 @@ loadedFat:
     add ax, word [userData]                     ; Add the userData 
     
     mov cl, byte [sectorsPerCluster]            ; Sectors to read
-    mov bx, LOAD_SEG                          ; Segment address of the buffer
+
+    mov bx, LOAD_SEG                            ; Segment address of the buffer
     mov es, bx                                  ; Point es:bx to where we will load
     mov bx, word [pointer]                      ; Increase the buffer by the pointer offset
     call readSectors                            ; Read the sectors
-
-  calculateNextSector:
+  
     mov ax, word [cluster]                      ; Current cluster number
-    xor dx, dx                                  ; We want to multiply by 1.5 (6/4 is equal to 1.5)
-    mov bx, 6                                   ; Multiply the cluster by the numerator
-    mul bx                                      ; Return value in ax and remainder in dx
-    mov bx, 4                                   ; Divide the cluster by the denominator
-    div bx    
-   
-    mov si, BUFFER_OFF                          ; Get the fat entry in gs:si
+    xor dx, dx   
+  
+  calculateNextSector:                          ; Get the next sector for FAT12 (cluster + (cluster * 1.5))
+    mov bx, 3                                   ; We want to multiply by 1.5 so divide by 3/2 
+    mul bx                                      ; Multiply the cluster by the numerator
+    mov bx, 2                                   ; Return value in ax and remainder in dx
+    div bx                                      ; Divide the cluster by the denominator
+
+  loadNextSector:
+    push ds
+
+    mov si, BUFFER_SEG
+    mov ds, si                                  ; Tempararly set ds:si to the buffer
+    mov si, BUFFER_OFF
+
     add si, ax                                  ; Point to the next cluster in the FAT entry
-    mov ax, word [gs:si]                        ; Load ax to the next cluster in FAT
+    mov ax, word [ds:si]                        ; Load ax to the next cluster in FAT
+
+    pop ds
 
     or dx, dx                                   ; Is the cluster caluclated even?
     jz evenSector
@@ -275,9 +289,6 @@ readSectors:
 ;---------------------------------------------------
     pusha
 
-  .sectorMain:
-    mov di, 5                                   ; Try five times to read the sector
-
   .sectorLoop:
     pusha
     push ax                                     ; Calculate absoluteSector
@@ -295,25 +306,29 @@ readSectors:
     mov ch, al                                  ; Move the absoluteTrack to ch for int 13h
 
     mov dl, byte [drive]                        ; Set correct device for int 13h
-    mov ax, 0x0201                              ; Read Sectors func of int 13h, read one sector
 
+    mov di, 5                                   ; Try five times to read the sector
+    
+  .attemptRead:
+    mov ax, 0x0201                              ; Read Sectors func of int 13h, read one sector
     int 0x13                                    ; Call int 13h (BIOS disk I/O)
-    jnc .sectorRead                             ; If no carry set, the sector has been read
+    jnc .readOk                                 ; If no carry set, the sector has been read
 
     xor ah, ah                                  ; Reset Drive func of int 13h
     int 0x13                                    ; Call int 13h (BIOS disk I/O)
-    popa
     
     dec di                                      ; Decrease read attempt counter
+    jnz .attemptRead                            ; Try to read the sector again
 
-    jnz .sectorLoop                             ; Try to read the sector again
+    mov si, diskError                           ; Error reading the disk
+    call print
     jmp reboot
-
-  .sectorRead:
+    
+  .readOk:
     popa
     add bx, word [bytesPerSector]               ; Add to the buffer address for the next sector
     inc ax                                      ; Increase the next sector to read
-    loop .sectorMain                            ; Read next sector for cx times
+    loop .sectorLoop                            ; Read next sector for cx times
 
     popa
     ret
@@ -358,12 +373,13 @@ print:
 
 
     filename       db "DEMO    BIN"             ; Kernel/Stage2 bootloader filename 
-    fileNotFound   db "File not found!", 0
+    fileNotFound   db "File not found!", 13, 10, 0
+    diskError      db "Disk error!", 13, 10, 0
 
     userData       dw 0                         ; Start of the data sectors
     drive          db 0                         ; Boot device number
     cluster        dw 0                         ; Cluster of the file that is being loaded
     pointer        dw 0                         ; Pointer into Buffer, for loading the file
 
-                   times 510 - ($ - $$) db 0    ; Pad remainder of boot sector with zeros
+                   times 510 - ($ - $$) db 0x0  ; Pad remainder of boot sector with zeros
                    dw 0xaa55                    ; Boot signature

@@ -16,16 +16,15 @@
 ;  You should have received a copy of the GNU General Public License
 ;  along with this program.  If not, see <http://www.gnu.org/licenses/>.
 ;
-    
-    STACK_SEG     equ 0x0f00                    ; (STACK_SEG * 0x10) + STACK_OFF = 0x10000
-    STACK_OFF     equ 0x1000
 
-    BUFFER_SEG    equ 0x1000                    ; (BUFFER_SEG * 0x10) + BUFFER_OFF = 0x10000
-    BUFFER_OFF    equ 0x0000
+    %define STACK_SEG  0x0f00                   ; (STACK_SEG  << 4) + STACK_OFF  = 0x010000
+    %define STACK_OFF  0x1000
 
-    STAGE2_SEG    equ 0x4000                    ; (STAGE2_SEG * 0x10) + STAEG2_OFF = 0x40000
-    STAGE2_OFF    equ 0x0000
-	
+    %define BUFFER_SEG 0x1000                   ; (BUFFER_SEG << 4) + BUFFER_OFF = 0x010000
+    %define BUFFER_OFF 0x0000
+
+    %define LOAD_SEG   0x4000                   ; (LOAD_SEG   << 4) + LOAD_OFF   = 0x040000
+    %define LOAD_OFF   0x0000
 	
 ;---------------------------------------------------------------------
 ; Bootloader Memory Map
@@ -64,14 +63,12 @@
     bits 16
 
 ;---------------------------------------------------
-; Stage2 entry-point
+; Demo entry-point
 ;---------------------------------------------------
 
 stage2:
-    mov ax, STAGE2_SEG                          ; Set segments to the location of the bootloader
+    mov ax, LOAD_SEG                            ; Set segments to the location of the bootloader
     mov ds, ax
-    mov gs, ax
-    mov fs, ax
     mov es, ax
     
     cli
@@ -79,25 +76,14 @@ stage2:
     mov ss, ax                                  ; Set segment register to the bottom  of the stack
     mov sp, STACK_OFF                           ; Set ss:sp to the top of the 4k stack
     sti
-    
-    or dl, dl                                   ; Test for a hard disk or floppy
-    jz flp
 
-  hda:                                          ; Booted from a hard disk!
-    mov si, drive
+    mov si, msg                                 ; Print out a little message c:
     call print
-    jmp hang
-     
-  flp:                                          ; Booted from a floppy disk!
-    mov si, floppy
-    call print
-    
-  hang:                                         ; Im just going to hang myself here :)
-    hlt
-    jmp hang
-    
+
+    hlt                                         ; Im just going to hang myself here
+
 ;---------------------------------------------------
-; Stage2 routines below
+; Demo routines below
 ;---------------------------------------------------
     
 ;---------------------------------------------------
@@ -117,11 +103,10 @@ print:
     jmp print                                   ; Loop untill string is null
   .done:
     ret
-
+    
 ;---------------------------------------------------
 ; Stage2 varables below
 ;---------------------------------------------------
     
-    floppy db "Loaded on a floppy disk!", 0
-    drive  db "Loaded on a hard drive!", 0
+    msg db "I can boot things!", 0
 
