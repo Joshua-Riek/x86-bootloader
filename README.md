@@ -4,16 +4,17 @@ then executing a program on a FAT12/16 formatted floppy or hard disk
 (including USB and CDs). Typically, this would be used as a boot sector
 for an operating system, second stage bootloader, or low level kernel.
 
-`fat12.asm` *Work In Progress*
+## Limitations
+Both *fat12.asm* and *fat16.asm* require an 8086 CPU or better.
 
-`fat16.asm` is a FAT12/16 bootloader that supports both floppy and hard disk devices, with a maximum disk size of 1GB. This is due to using the BIOS interrupt call [13h] service [02h] in support for older hardware. Please note that this may allocate up to 128KB of RAM in order to load the entire File Allocation Table (FAT) into memory; therefore, leaving approximately 400KB of conventional memory for loading your program or kernel.
+The file *fat16.asm* supports drives with a minimum size of 16MB and a maximum of 1GB. This is due to using the BIOS interrupt call [13h] service [02h] in support for older hardware. Please note that this may allocate up to 128KB of RAM in order to load the entire File Allocation Table (FAT) into memory; therefore, leaving approximately 400KB of conventional memory for loading your program or kernel.
 
 ## Features and Goals
 - [x] FAT12 floppy disk support
 - [x] FAT12 hard disk support
 - [x] Works on any allowed FAT12 size
 - [x] FAT16 hard disk support
-- [x] Works on any allowed FAT16 size
+- [x] Works on any allowed FAT16 size *(W/O [42h])*
 - [ ] FAT32 hard disk support
 - [ ] Works on any allowed FAT32 size
 
