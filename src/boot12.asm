@@ -1,6 +1,6 @@
-;  boot16.asm
+;  boot12.asm
 ;
-;  This program is a FAT16 bootloader.
+;  This program is a FAT12 bootloader
 ;  Copyright (c) 2017-2018, Joshua Riek
 ;
 ;  This program is free software: you can redistribute it and/or modify
@@ -16,77 +16,26 @@
 ;  You should have received a copy of the GNU General Public License
 ;  along with this program.  If not, see <http://www.gnu.org/licenses/>.
 ;
+
+    %define BOOT_SEG   0x07c0                   ; (BOOT_SEG  << 4)  + BOOT_OFF   = 0x007c00
+    %define BOOT_OFF   0x0000
     
+    %define STACK_SEG  0x0600                   ; (STACK_SEG  << 4) + STACK_OFF  = 0x007000
+    %define STACK_OFF  0x1000
+
+    %define BUFFER_SEG 0x2000                   ; (BUFFER_SEG << 4) + BUFFER_OFF = 0x020000
+    %define BUFFER_OFF 0x0000
+
+    %define LOAD_SEG   0x1000                   ; (LOAD_SEG   << 4) + LOAD_OFF   = 0x010000
+    %define LOAD_OFF   0x0000
+
     %ifidn __OUTPUT_FORMAT__, elf               ; WARNING: Assumes that the text segment is set to
-      %define BOOT_SEG 0x0000                   ; 0x7c00, generally used while debugging with GDB
+      %define BOOT_SEG 0x0000                   ; 0x7c00, used ONLY for debugging with GDB
       %define BOOT_OFF 0x0000
-    %elifidn __OUTPUT_FORMAT__, bin             ; Normal binary output boot segments :)
-      %define BOOT_SEG 0x07c0
-      %define BOOT_OFF 0x0000
-    %else
-      %fatal "Please use the 'elf' or 'bin' output format!"
     %endif
-   
-    %ifndef STACK_SEG                           ; Set default stack segment if not defined 
-      %define STACK_SEG 0x0600
-    %endif
-
-    %ifndef STACK_OFF                           ; Set default stack offset if not defined 
-      %define STACK_OFF 0x1000
-    %endif
-
-    %ifndef BUFFER_SEG                          ; Set default buffer segment if not defined 
-      %define BUFFER_SEG 0x1000
-    %endif
-
-    %ifndef BUFFER_OFF                          ; Set default buffer offset if not defined 
-      %define BUFFER_OFF 0x0000
-    %endif
-
-    %ifndef LOAD_SEG                            ; Set default load segment if not defined 
-      %define LOAD_SEG 0x0100
-    %endif
-
-    %ifndef LOAD_OFF                            ; Set default load offset if not defined 
-      %define LOAD_OFF 0x0000
-    %endif
-	
-;---------------------------------------------------------------------
-; Bootloader Memory Map
-;---------------------------------------------------------------------
-; Linear Address | Item
-;       0x100000 | Top of memory hole
-;       0x0f0000 | Video memory, MMIO, BIOS	
-;       0x0a0000 | Bottom of memory hole
-;       0x090000 |
-;       0x080000 |
-;       0x070000 |
-;       0x060000 |
-;       0x050000 |
-;       0x040000 |    
-;       0x030000 | 
-;       0x020000 | 
-;       0x010000 | Disk buffer    128k (start: 0x010000)
-;       0x00f000 | 
-;       0x00e000 |
-;       0x00d000 |
-;       0x00c000 |
-;       0x00b000 |
-;       0x00a000 |
-;       0x009000 |
-;       0x008000 |
-; ====> 0x007000 | Boot location   512b (start: 0x007c00)
-;       0x006000 | Boot stack        4k (top:   0x007000)
-;       0x005000 |              
-;       0x004000 |
-;       0x003000 |
-;       0x002000 |
-;       0x001000 | Load location     1k (start: 0x001000)
-;       0x000000 | Reserved (Real Mode IVT, BDA)
-;---------------------------------------------------------------------
-
+    
     bits 16                                     ; Ensure 16-bit code, because fuck 32-bits
-    cpu  8086                                   ; Assemble only for the 8086 instruction set
+    cpu  8086                                   ; Assemble with the 8086 instruction set
 
 ;---------------------------------------------------
 ; Disk description table
@@ -153,14 +102,13 @@ bootStrap:
     xor dh, dh
     inc dx                                      ; Head numbers start at zero, so add one
     mov word [heads], dx                        ; Save the head number
-    
+
 ;---------------------------------------------------
 ; Load the root directory from the disk
 ;---------------------------------------------------
 
 loadRoot:
     xor cx, cx
-
     mov ax, 32                                  ; Size of root dir = (rootDirEntries * 32) / bytesPerSector
     mul word [rootDirEntries]                   ; Multiply by the total size of the root directory
     div word [bytesPerSector]                   ; Divided by the number of bytes used per sector
@@ -175,7 +123,6 @@ loadRoot:
     
     mov di, BUFFER_SEG                          ; Set the extra segment to the disk buffer
     mov es, di
-
     mov di, BUFFER_OFF                          ; Set es:di and load the root directory into the disk buffer
     call readSectors                            ; Read the sectors
 
@@ -225,12 +172,9 @@ findFile:
 ;--------------------------------------------------
 
 loadFat:
-    mov ax, [es:di + 17]                        ; Get the size of the file at offset 28
-    push ax                                     ; Store onto stack
-    
     mov ax, word [es:di + 15]                   ; Get the file cluster at offset 26
     push ax                                     ; Store the FAT cluster
-    
+
     xor ax, ax                                  ; Size of fat = (fats * fatSectors)
     mov al, byte [fats]                         ; Move number of fats into al
     mul word [fatSectors]                       ; Move fat sectors into bx
@@ -245,15 +189,14 @@ loadFat:
 ; Load the clusters of the file and jump to it
 ;---------------------------------------------------
     
-loadFile:    
+ loadFile: 
     mov di, LOAD_SEG
-    mov es, di                                  ; Set es:bx to where the file will load (0x4000:0x0000)
+    mov es, di                                  ; Set es:di to where the file will load
     mov di, LOAD_OFF
 
     pop ax                                      ; File cluster restored
     call readClusters                           ; Read clusters from the file
 
-    pop bx                                      ; Restore filesize into bx
     mov dl, byte [drive]                        ; Pass the boot drive into dl
     jmp LOAD_SEG:LOAD_OFF                       ; Jump to the file loaded!
 
@@ -264,7 +207,7 @@ loadFile:
 ; Bootloader routines below
 ;---------------------------------------------------
 
-  
+    
 ;---------------------------------------------------
 readClusters:
 ;
@@ -293,7 +236,8 @@ readClusters:
     sub ax, 2                                   ; Subtract 2
     mov bl, byte [sectorsPerCluster]            ; Sectors per cluster is a byte value
     mul bx                                      ; Multiply (cluster - 2) * sectorsPerCluster
-    add ax, word [userData]                     ; Add the userData 
+    add ax, word [userData]                     ; Add the userData
+
     xor ch, ch
     mov cl, byte [sectorsPerCluster]            ; Sectors to read
 
@@ -301,10 +245,12 @@ readClusters:
 
     pop ax                                      ; Current cluster number
     xor dx, dx
-    
-  .calculateNextSector16:                       ; Get the next sector for FAT16 (cluster * 2)
-    mov bx, 2                                   ; Multiply the cluster by two (cluster is in ax)
-    mul bx
+
+  .calculateNextSector12:                        ; Get the next sector for FAT12 (cluster + (cluster * 1.5))
+    mov bx, 3                                   ; We want to multiply by 1.5 so divide by 3/2 
+    mul bx                                      ; Multiply the cluster by the numerator
+    mov bx, 2                                   ; Return value in ax and remainder in dx
+    div bx                                      ; Divide the cluster by the denominator
 
   .loadNextSector:
     push ds
@@ -321,7 +267,7 @@ readClusters:
     pop ds
 
   .nextSectorCalculated:
-    cmp ax, 0xfff8                              ; Are we at the end of the file?
+    cmp ax, 0xff8                              ; Are we at the end of the file?
     jae .done
 
     add di, 512                                 ; Add to the pointer offset
@@ -343,7 +289,7 @@ readClusters:
     pop ax
 
     ret
-
+  
 ;---------------------------------------------------
 readSectors:
 ;
@@ -370,7 +316,7 @@ readSectors:
   .sectorLoop:
     push ax
     push cx
-    
+
     xor dx, dx
     div word [sectorsPerTrack]                  ; Divide the lba (value in ax) by sectorsPerTrack
     mov cx, dx                                  ; Save the absolute sector value 
@@ -423,11 +369,8 @@ readSectors:
     mov es, dx                                  ; es segment by 0x1000
 
   .nextSector:
-    dec cx                                      ; Decrease the loop counter and see if zero
-
-    or cx, cx
-    jnz .sectorLoop
-
+    loop .sectorLoop
+    
     pop es
     pop di
     pop dx
@@ -456,19 +399,19 @@ print:
   .done:
     ret
 
-
+    
 ;---------------------------------------------------
 ; Bootloader varables below
 ;---------------------------------------------------
 
     
-    filename       db "LOAD    BIN"             ; Kernel/Stage2 filename 
-
     fileNotFound   db "File not found!", 0      ; File was not found
     diskError      db "Disk Error!",  0         ; Error while reading from the disk
     
-    userData       dw 0x0000                    ; Start of the data sectors
-    drive          db 0x00                      ; Boot drive number
+    userData       dw 0                         ; Start of the data sectors
+    drive          db 0                         ; Boot drive number
+    
+    filename       db "DEMO    BIN"             ; Filename
 
-                   times 510 - ($ - $$) db 0x00 ; Pad remainder of boot sector with zeros
+                   times 510 - ($ - $$) db 0    ; Pad remainder of boot sector with zeros
                    dw 0xaa55                    ; Boot signature

@@ -22,9 +22,12 @@ LD           ?= ld
 AR           ?= ar
 NASM         ?= nasm
 OBJCOPY      ?= objcopy
+DD           ?= dd
 
 # Output directory
-OUTDIR        = obj
+SRCDIR        = ./src
+OBJDIR        = ./obj
+BINDIR        = ./bin
 
 # Build flags
 CFLAGS       +=
@@ -34,7 +37,6 @@ LDFLAGS      += -m elf_i386 -Ttext=0x7c00
 NASMFLAGS    += -f elf -g3 -F dwarf
 OBJCOPYFLAGS += -O binary
 
-FIXTEXTFLAGS += --change-section-vma
 
 # For Windows compatibility (I recomend using a i686-elf cross-compiler)
 ifeq ($(OS), Windows_NT)
@@ -44,47 +46,58 @@ ifeq ($(OS), Windows_NT)
 endif
 
 
-.PHONY: all clean clobber
+# Set phony targets
+.PHONY: all clean clobber fat12 fat16 demo
+
 
 # Rule to make targets
-all: $(OUTDIR)/boot12.bin $(OUTDIR)/boot16.bin $(OUTDIR)/demo.bin
+all: fat12 fat16 demo
+
 
 # Makefile target for the FAT12 bootloader
-$(OUTDIR)/boot12.elf: $(OUTDIR)/boot12.o
+fat12: $(BINDIR)/boot12.bin
+
+$(BINDIR)/boot12.elf: $(OBJDIR)/boot12.o
 	$(LD) $^ $(LDFLAGS) -o $@
 
-$(OUTDIR)/boot12.o: boot12.asm | $(OUTDIR)
+$(OBJDIR)/boot12.o: $(SRCDIR)/boot12.asm | $(OBJDIR)
 	$(NASM) $^ $(NASMFLAGS) -o $@
 
-$(OUTDIR)/boot12.bin: $(OUTDIR)/boot12.elf
+$(BINDIR)/boot12.bin: $(BINDIR)/boot12.elf
 	$(OBJCOPY) $^ $(OBJCOPYFLAGS) $@
 
-# Makefile target for the FAT16 bootloader
-$(OUTDIR)/boot16.o: boot16.asm | $(OUTDIR)
-	$(NASM) $^ $(NASMFLAGS) -o $@ 
 
-$(OUTDIR)/boot16.elf: $(OUTDIR)/boot16.o
+# Makefile target for the FAT16 bootloader
+fat16: $(BINDIR)/boot16.bin
+
+$(BINDIR)/boot16.elf: $(OBJDIR)/boot16.o
 	$(LD) $^ $(LDFLAGS) -o $@
 
-$(OUTDIR)/boot16.bin: $(OUTDIR)/boot16.elf
-	$(OBJCOPY) $^ $(OBJCOPYFLAGS) $@ 
+$(OBJDIR)/boot16.o: $(SRCDIR)/boot16.asm | $(OBJDIR)
+	$(NASM) $^ $(NASMFLAGS) -o $@
+
+$(BINDIR)/boot16.bin: $(BINDIR)/boot16.elf
+	$(OBJCOPY) $^ $(OBJCOPYFLAGS) $@
+
 
 # Makefile target for the demo file
-$(OUTDIR)/demo.bin: demo.asm | $(OUTDIR)
+demo: $(BINDIR)/demo.bin
+
+$(BINDIR)/demo.bin: $(SRCDIR)/demo.asm | $(OBJDIR)
 	$(NASM) $^ -f bin -o $@
-
-
-# Create the output folder
-$(OUTDIR):
-	mkdir -p $(OUTDIR)
-
-install:
-	dd if=obj/boot16.bin of=floppy.img bs=1 skip=62 seek=62
 
 
 # Clean produced files
 clean:
-	rm -r -f $(OUTDIR)
+	rm -f $(OBJDIR)/* $(OBJDIR)/*
 
+# Clean files from emacs
 clobber: clean
-	rm -f *.img *~ \#*\#
+	rm -f $(SRCDIR)/*~ $(SRCDIR)\#*\#
+
+
+# Write the bootloader to a disk image
+install:
+	$(DD) if=$(BINDIR)/boot16.bin of=../floppy.img bs=1 skip=62 seek=62
+
+
