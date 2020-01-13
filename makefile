@@ -1,6 +1,6 @@
 #  makefile
 #
-#  Copyright (c) 2017-2018, Joshua Riek
+#  Copyright (c) 2017-2020, Joshua Riek
 #
 #  This program is free software: you can redistribute it and/or modify
 #  it under the terms of the GNU General Public License as published by
@@ -38,47 +38,35 @@ NASMFLAGS    += -f elf -g3 -F dwarf
 OBJCOPYFLAGS += -O binary
 
 
-# For Windows compatibility (I recomend using a i686-elf cross-compiler)
+# NOTE: Using DD from MinGW seems to work better for me
+# For Windows compatibility (using a i686-elf cross-compiler)
 ifeq ($(OS), Windows_NT)
   CC         := i686-elf-gcc
   LD         := i686-elf-ld
-  AR         := i686-elf-ar 
+  AR         := i686-elf-ar
+  DD         := D:\Compilers\MinGW\bin\dd
 endif
 
 
 # Set phony targets
-.PHONY: all clean clobber fat12 fat16 demo
+.PHONY: all clean clobber boot demo
 
 
 # Rule to make targets
-all: fat12 fat16 demo
+all: boot demo
 
 
-# Makefile target for the FAT12 bootloader
-fat12: $(BINDIR)/boot12.bin
+# Makefile target for the FAT bootloader
+boot: $(BINDIR)/boot.bin
 
-$(BINDIR)/boot12.elf: $(OBJDIR)/boot12.o
+$(BINDIR)/boot.elf: $(OBJDIR)/boot.o
 	$(LD) $^ $(LDFLAGS) -o $@
 
-$(OBJDIR)/boot12.o: $(SRCDIR)/boot12.asm | $(OBJDIR)
+$(OBJDIR)/boot.o: $(SRCDIR)/boot.asm | $(OBJDIR)
 	$(NASM) $^ $(NASMFLAGS) -o $@
 
-$(BINDIR)/boot12.bin: $(BINDIR)/boot12.elf
+$(BINDIR)/boot.bin: $(BINDIR)/boot.elf
 	$(OBJCOPY) $^ $(OBJCOPYFLAGS) $@
-
-
-# Makefile target for the FAT16 bootloader
-fat16: $(BINDIR)/boot16.bin
-
-$(BINDIR)/boot16.elf: $(OBJDIR)/boot16.o
-	$(LD) $^ $(LDFLAGS) -o $@
-
-$(OBJDIR)/boot16.o: $(SRCDIR)/boot16.asm | $(OBJDIR)
-	$(NASM) $^ $(NASMFLAGS) -o $@
-
-$(BINDIR)/boot16.bin: $(BINDIR)/boot16.elf
-	$(OBJCOPY) $^ $(OBJCOPYFLAGS) $@
-
 
 # Makefile target for the demo file
 demo: $(BINDIR)/demo.bin
@@ -98,6 +86,6 @@ clobber: clean
 
 # Write the bootloader to a disk image
 install:
-	$(DD) if=$(BINDIR)/boot16.bin of=../floppy.img bs=1 skip=62 seek=62
+	$(DD) if=$(BINDIR)/boot.bin of=floppy.img bs=1 skip=62 seek=62
 
 

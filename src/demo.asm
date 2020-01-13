@@ -1,7 +1,7 @@
 ;  demo.asm
 ;
 ;  This is just a demo file for the bootloader.  
-;  Copyright (c) 2017-2018, Joshua Riek
+;  Copyright (c) 2017-2020, Joshua Riek
 ;
 ;  This program is free software: you can redistribute it and/or modify
 ;  it under the terms of the GNU General Public License as published by
@@ -17,7 +17,8 @@
 ;  along with this program.  If not, see <http://www.gnu.org/licenses/>.
 ;
 
-    bits 16
+    bits 16                                     ; Ensure 16-bit code
+    cpu  8086                                   ; Assemble with the 8086 instruction set
 
 ;---------------------------------------------------
 ; Demo entry-point
@@ -25,42 +26,29 @@
 
 demo:
     mov ax, cs
-    mov ds, ax
+    mov ds, ax                                  ; Just set the segments equal to the code segment 
     mov es, ax
 
-
-    mov si, msg
-    call print
-    
-  .stop:
-    hlt                                         ; Im just going to hang myself here
-    jmp .stop
-    
-;---------------------------------------------------
-; Demo routines below
-;---------------------------------------------------
-    
-;---------------------------------------------------
-print:
-;
-; Print out a simple string.
-;
-; @param: SI => String
-; @return: None
-;
-;---------------------------------------------------
-    lodsb                                       ; Load byte from si to al
-    or al, al                                   ; If al is empty stop looping
-    jz .done                                    ; Done looping and return
     mov ah, 0x0e                                ; Teletype output
+    mov al, 0x4f
     int 0x10                                    ; Video interupt
-    jmp print                                   ; Loop untill string is null
-  .done:
-    ret
-    
-;---------------------------------------------------
-; Stage2 varables below
-;---------------------------------------------------
-    
-    msg db "I can boot things!", 0
+    mov al, 0x77
+    int 0x10                                    ; Video interupt
+    mov al, 0x4f
+    int 0x10                                    ; Video interupt
 
+    xor ax, ax
+    int 0x16                                    ; Get a single keypress
+    
+    mov ah, 0x0e                                ; Teletype output
+    mov al, 0x0d                                ; Carriage return
+    int 0x10                                    ; Video interupt
+    mov al, 0x0a                                ; Line feed
+    int 0x10                                    ; Video interupt
+    mov al, 0x0a                                ; Line feed
+    int 0x10                                    ; Video interupt
+    
+    xor ax, ax
+    int 0x19                                    ; Reboot the system
+    
+    hlt

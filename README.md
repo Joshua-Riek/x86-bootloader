@@ -1,20 +1,21 @@
-## NASM Bootloaders
-A small collection of homemade bootloaders capable of finding, loading,
+## NASM Bootloader
+A small 512 byte program that is capable of finding, loading,
 then executing a program on a FAT12/16 formatted floppy or hard disk 
 (including USB and CDs). Typically, this would be used as a boot sector
 for an operating system, second stage bootloader, or low level kernel.
 
 ## Limitations
-Both *fat12.asm* and *fat16.asm* where created in mind for older hardware; therefore, requires an i8086 or better CPU and a recomended 256KB of ram.
+Requires an i8086 or better CPU.
 
-
-
-The file *fat16.asm* supports drives with a minimum size of 16MB and a maximum of 2GB. This is due to using the BIOS interrupt call [13h] service [02h] in support for older hardware. Please note that this may allocate up to 128KB of RAM in order to load the entire File Allocation Table (FAT) into memory; therefore, leaving approximately 400KB of conventional memory for loading your program or kernel.
+The bootloader supports any size up to a maximum of 2GB. 
+This is due to using the BIOS interrupt call [13h] service [02h] in support for older hardware. 
+Please note that when using a hard drive that is 2GB in size, this bootloader may allocate ~256KB
+of RAM in order to load the entire File Allocation Table (FAT) into memory; therefore, leaving 
+approximately 272KB of conventional memory for loading your program or kernel.
 
 ## Features and Goals
 - [x] FAT12 floppy disk support
 - [x] FAT16 hard disk support
-- [ ] FAT32 hard disk support
 
 ## Resources
 * [OSDev] Is a great website for any Hobby OS developer.
