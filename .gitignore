@@ -2,7 +2,7 @@
 *.img
 *.elf
 *.o
-obj
-bin
+/obj/**
+/bin/**
 *.bin
 *.elf
