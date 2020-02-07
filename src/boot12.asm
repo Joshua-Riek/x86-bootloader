@@ -1,7 +1,7 @@
-;  boot.asm
+;  boot12.asm
 ;
-;  This program is a FAT12 and FAT16 bootloader
-;  Copyright (c) 2017-2018, Joshua Riek
+;  This program is a FAT12 bootloader
+;  Copyright (c) 2017-2020, Joshua Riek
 ;
 ;  This program is free software: you can redistribute it and/or modify
 ;  it under the terms of the GNU General Public License as published by
@@ -26,8 +26,8 @@
     %define BUFFER_SEG 0x1000                   ; (BUFFER_SEG << 4) + BUFFER_OFF = 0x010000
     %define BUFFER_OFF 0x0000
 
-    %define LOAD_SEG   0x0100                   ; (LOAD_SEG   << 4) + LOAD_OFF   = 0x001000
-    %define LOAD_OFF   0x0000
+    %define LOAD_SEG   0x0000                   ; (LOAD_SEG   << 4) + LOAD_OFF   = 0x001000
+    %define LOAD_OFF   0x1000
 
     %ifidn __OUTPUT_FORMAT__, elf               ; WARNING: Assumes that the text segment is set to
       %define BOOT_SEG 0x0000                   ; 0x7c00, used ONLY for debugging with GDB
@@ -120,7 +120,7 @@ loadRoot:
     add ax, word [reservedSectors]              ; Increase ax by the reserved sectors
 
     mov word [userData], ax                     ; start of user data = startOfRoot + numberOfRoot
-    add word [userData], cx                     ; Therefore, just add the size and location of the root directory
+    mov word [userData], cx                     ; Therefore, just add the size and location of the root directory
     
     mov di, BUFFER_SEG                          ; Set the extra segment to the disk buffer
     mov es, di
@@ -160,7 +160,6 @@ findFile:
     int 0x10                                    ; Video interupt
     mov al, 0x0a                                ; Line feed
     int 0x10                                    ; Video interupt
-    mov al, 0x0a                                ; Line feed
     int 0x10                                    ; Video interupt
 
     xor ax, ax
@@ -188,10 +187,15 @@ loadFat:
 ; Load the clusters of the file and jump to it
 ;---------------------------------------------------
     
- loadFile: 
+loadFile: 
     mov di, LOAD_SEG
     mov es, di                                  ; Set es:di to where the file will load
     mov di, LOAD_OFF
+    
+    xor ax, ax                                  ; Size of fat = (fats * fatSectors)
+    mov al, byte [fats]                         ; Move number of fats into al
+    mul word [fatSectors]                       ; Move fat sectors into bx
+    mov cx, ax                                  ; Store in cx
 
     pop ax                                      ; File cluster restored
     call readClusters                           ; Read clusters from the file
@@ -219,9 +223,6 @@ readClusters:
 ; Returns: None
 ;
 ;--------------------------------------------------
-    push ax                                     ; NOTE: Dont relly need to push registers here 
-    push bx                                     ; just doing this to save space
-
   .clusterLoop:
     push ax
     dec ax
@@ -236,31 +237,16 @@ readClusters:
     mov cl, byte [sectorsPerCluster]            ; Sectors to read
     call readSectors                            ; Read the sectors
 
-    xor dx, dx                                  ; Total fat clusters = (sectors - startOfUserData) / sectorsPerCluster
-    mov ax, word [sectors]                      ; Take the total sectors subtracted
-    sub ax, word [userData]                     ; by the start of the data sectors
-    div bx                                      ; and finally divide 
-
-    xor dx, dx  
-    mov ax, bx
     pop ax                                      ; Current cluster number
+    xor bh, bh
     
-    cmp bx, 4096                                ; Calculate the next FAT12 or FAT16 sector
-    jle .calculateNextSector12
-    
-  .calculateNextSector16:                       ; Get the next sector for FAT16 (cluster * 2)
-    mov bx, 2                                   ; Multiply the cluster by two (cluster is in ax)
-    mul bx
-
-    jmp .loadNextSector
-    
-  .calculateNextSector12:                       ; Get the next sector for FAT12 (cluster + (cluster * 1.5))
-    mov bx, 3                                   ; We want to multiply by 1.5 so divide by 3/2 
+  .calculateNextCluster12:                      ; Get the next cluster for FAT12 (cluster + (cluster * 1.5))
+    mov bl, 3                                   ; We want to multiply by 1.5 so divide by 3/2 
     mul bx                                      ; Multiply the cluster by the numerator
-    mov bx, 2                                   ; Return value in ax and remainder in dx
+    mov bl, 2                                   ; Return value in ax and remainder in dx
     div bx                                      ; Divide the cluster by the denominator
    
-  .loadNextSector:
+  .loadNextCluster:
     push ds
     push si
 
@@ -275,23 +261,32 @@ readClusters:
     pop ds
     
     or dx, dx                                   ; Is the cluster caluclated even?
-    jz .evenSector
+    jz .evenCluster
 
-  .oddSector:
+  .oddCluster:
     shr ax, 1                                   ; Drop the first 4 bits of the next cluster
     shr ax, 1
     shr ax, 1
     shr ax, 1
-    jmp .nextSectorCalculated
+    jmp .nextClusterCalculated
 
-  .evenSector:
+  .evenCluster:
     and ax, 0x0fff                              ; Drop the last 4 bits of next cluster
         
-  .nextSectorCalculated:
-    cmp ax, 0xff8                               ; Are we at the end of the file?
+  .nextClusterCalculated:
+    cmp ax, 0x0ff8                              ; Are we at the end of the file?
     jae .done
 
-    add di, 512                                 ; Add to the pointer offset
+    xchg cx, ax
+    xor dx, dx
+    xor bh, bh                                  ; Calculate the size in bytes per cluster
+    mov ax, word [bytesPerSector]               ; So, take the bytes per sector
+    mov bl, byte [sectorsPerCluster]            ; and mul that by the sectors per cluster
+    mul bx
+    xchg cx, ax
+    
+    clc
+    add di, cx                                  ; Add to the pointer offset
     jnc .clusterLoop 
 
   .fixBuffer:                                   ; An error will occur if the buffer in memory
@@ -302,9 +297,6 @@ readClusters:
     jmp .clusterLoop                            ; Load the next file cluster
 
   .done:
-    pop bx
-    pop ax
-
     ret
   
 ;---------------------------------------------------
@@ -375,9 +367,9 @@ readSectors:
     pop cx
     pop ax
 
+    clc
     inc ax                                      ; Increase the next sector to read
     add bx, word [bytesPerSector]               ; Add to the buffer address for the next sector
-    
     jnc .nextSector 
 
   .fixBuffer:                                   ; An error will occur if the buffer in memory
@@ -421,12 +413,12 @@ print:
 ; Bootloader varables below
 ;---------------------------------------------------
 
-    diskError      db "RE", 0                   ; Error while reading from the disk
-    fileNotFound   db "NF", 0                   ; File was not found
+    diskError      db "Disk err", 0             ; Error while reading from the disk
+    fileNotFound   db "File err", 0             ; File was not found
     
     userData       dw 0                         ; Start of the data sectors
     drive          db 0                         ; Boot drive number
-    
+
     filename       db "DEMO    BIN"             ; Filename
 
                    times 510 - ($ - $$) db 0    ; Pad remainder of boot sector with zeros

@@ -1,2 +1,8 @@
 
 *.img
+*.elf
+*.o
+obj
+bin
+*.bin
+*.elf

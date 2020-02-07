@@ -24,6 +24,9 @@ NASM         ?= nasm
 OBJCOPY      ?= objcopy
 DD           ?= dd
 
+# Other tools
+QEMU         ?= qemu-system-i386
+
 # Output directory
 SRCDIR        = ./src
 OBJDIR        = ./obj
@@ -37,6 +40,9 @@ LDFLAGS      += -m elf_i386 -Ttext=0x7c00
 NASMFLAGS    += -f elf -g3 -F dwarf
 OBJCOPYFLAGS += -O binary
 
+# Disk image file
+DISKIMG       = floppy.img
+
 
 # NOTE: Using DD from MinGW seems to work better for me
 # For Windows compatibility (using a i686-elf cross-compiler)
@@ -49,24 +55,38 @@ endif
 
 
 # Set phony targets
-.PHONY: all clean clobber boot demo
+.PHONY: all clean clobber run debug install boot12 boot16 demo
 
 
 # Rule to make targets
-all: boot demo
+all: boot12 boot16 demo
 
 
-# Makefile target for the FAT bootloader
-boot: $(BINDIR)/boot.bin
+# Makefile target for the FAT12 bootloader
+boot12: $(BINDIR)/boot12.bin
 
-$(BINDIR)/boot.elf: $(OBJDIR)/boot.o
+$(BINDIR)/boot12.bin: $(BINDIR)/boot12.elf
+	$(OBJCOPY) $^ $(OBJCOPYFLAGS) $@
+
+$(BINDIR)/boot12.elf: $(OBJDIR)/boot12.o | $(BINDIR)
 	$(LD) $^ $(LDFLAGS) -o $@
 
-$(OBJDIR)/boot.o: $(SRCDIR)/boot.asm | $(OBJDIR)
+$(OBJDIR)/boot12.o: $(SRCDIR)/boot12.asm | $(OBJDIR)
 	$(NASM) $^ $(NASMFLAGS) -o $@
 
-$(BINDIR)/boot.bin: $(BINDIR)/boot.elf
+
+# Makefile target for the FAT16 bootloader
+boot16: $(BINDIR)/boot16.bin
+
+$(BINDIR)/boot16.bin: $(BINDIR)/boot16.elf
 	$(OBJCOPY) $^ $(OBJCOPYFLAGS) $@
+
+$(BINDIR)/boot16.elf: $(OBJDIR)/boot16.o | $(BINDIR)
+	$(LD) $^ $(LDFLAGS) -o $@
+
+$(OBJDIR)/boot16.o: $(SRCDIR)/boot16.asm | $(OBJDIR)
+	$(NASM) $^ $(NASMFLAGS) -o $@
+
 
 # Makefile target for the demo file
 demo: $(BINDIR)/demo.bin
@@ -75,9 +95,18 @@ $(BINDIR)/demo.bin: $(SRCDIR)/demo.asm | $(OBJDIR)
 	$(NASM) $^ -f bin -o $@
 
 
+# Create the obj dir
+$(OBJDIR):
+	@mkdir -p $@
+
+# Create the bin dir
+$(BINDIR):
+	@mkdir -p $@
+
+
 # Clean produced files
 clean:
-	rm -f $(OBJDIR)/* $(OBJDIR)/*
+	rm -f $(OBJDIR)/* $(OBJDIR)/* $(BINDIR)/*
 
 # Clean files from emacs
 clobber: clean
@@ -86,6 +115,12 @@ clobber: clean
 
 # Write the bootloader to a disk image
 install:
-	$(DD) if=$(BINDIR)/boot.bin of=floppy.img bs=1 skip=62 seek=62
+	$(DD) if=$(BINDIR)/boot12.bin of=floppy.img bs=1 skip=62 seek=62
 
+# Run the disk image
+run:
+	$(QEMU) -fda $(DISKIMG)
 
+# Start a debug session with qemu
+debug:
+	$(QEMU) -S -s -fda $(DISKIMG)
