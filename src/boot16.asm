@@ -121,6 +121,8 @@ loadRoot:
 
     mov word [userData], ax                     ; start of user data = startOfRoot + numberOfRoot
     add word [userData], cx                     ; Therefore, just add the size and location of the root directory
+
+    xor dx, dx
     
     mov di, BUFFER_SEG                          ; Set the extra segment to the disk buffer
     mov es, di
@@ -178,8 +180,9 @@ loadFat:
     mul word [fatSectors]                       ; Move fat sectors into bx
     mov cx, ax                                  ; Store in cx
     
-    mov ax, word [reservedSectors]              ; Convert the first fat on the disk
+    xor dx, dx
 
+    mov ax, word [reservedSectors]              ; Convert the first fat on the disk
     mov di, BUFFER_OFF                          ; Set es:di and load the fat sectors into the disk buffer
     call readSectors                            ; Read the sectors
 
@@ -245,17 +248,30 @@ readClusters:
     push si
 
     mov si, BUFFER_SEG
-    mov ds, si                                  ; Tempararly set ds:si to the FAT buffer
+    mov ds, si                                  ; Tempararly set es:di to the FAT16 buffer
     mov si, BUFFER_OFF
 
-    add si, ax                                  ; Point to the next cluster in the FAT entry
-    mov ax, word [ds:si]                        ; Load ax to the next cluster in FAT
+    clc
+    xor cx, cx
+    add di, ax                                  ; Add the offset into the FAT16 table
+    adc cx, dx                                  ; Add and carry the segment into the FAT16 table
+
+    shl cl, 1                                   ; Shift left 4 bits for the segment 
+    shl cl, 1
+    shl cl, 1
+    shl cl, 1
+
+    mov dx, es
+    add dh, cl                                  ; Now we can set the correct segment into the FAT16 table
+    mov es, dx
+
+    mov ax, word [ds:si]                        ; Load ax to the next cluster in the FAT16 table
     
     pop si
     pop ds
 
   .nextClusterCalculated:
-    cmp ax, 0xfff8                               ; Are we at the end of the file?
+    cmp ax, 0xfff8                              ; Are we at the end of the file?
     jae .done
 
     xchg cx, ax
@@ -288,11 +304,11 @@ readSectors:
 ;
 ; Read sectors starting at a given sector by 
 ; the given times and load into a buffer. Please
-; note that this may allocate up to 128KB of ram.
+; note that this may allocate up to 256KB of ram.
 ;
-; Expects: AX    = Starting sector
-;          CX    = Number of sectors to read
+; Expects: AX:DX = Starting sector/ lba
 ;          ES:DI = Location to load sectors
+;          CX    = Number of sectors to read
 ;
 ; Returns: None
 ;
@@ -309,9 +325,11 @@ readSectors:
   .sectorLoop:
     push ax
     push cx
-
-    xor dx, dx
-    div word [sectorsPerTrack]                  ; Divide the lba (value in ax) by sectorsPerTrack
+    push dx
+    
+    ;xor dx, dx                                 ; This allows us to access even more sectors!
+    
+    div word [sectorsPerTrack]                  ; Divide the lba (value in ax:dx) by sectorsPerTrack
     mov cx, dx                                  ; Save the absolute sector value 
     inc cx
 
@@ -348,6 +366,7 @@ readSectors:
     jmp reboot
     
   .readOk:
+    pop dx
     pop cx
     pop ax
 
@@ -356,11 +375,13 @@ readSectors:
     
     jnc .nextSector 
 
-  .fixBuffer:                                   ; An error will occur if the buffer in memory
-    mov dx, es                                  ; overlaps a 64k page boundry, when bx overflows
+  .fixBuffer:
+    push dx                                     ; An error will occur if the buffer in memory
+    mov dx, es                                  ; overlaps a 64k page boundry, when di overflows
     add dh, 0x10                                ; it will trigger the carry flag, so correct
     mov es, dx                                  ; es segment by 0x1000
-
+    pop dx
+    
   .nextSector:
     loop .sectorLoop
     
@@ -397,8 +418,8 @@ print:
 ; Bootloader varables below
 ;---------------------------------------------------
 
-    diskError      db "Disk error", 0           ; Error while reading from the disk
-    fileNotFound   db "File not found", 0       ; File was not found
+    diskError      db "Disk err", 0             ; Error while reading from the disk
+    fileNotFound   db "File err", 0             ; File was not found
     
     userData       dw 0                         ; Start of the data sectors
     drive          db 0                         ; Boot drive number
