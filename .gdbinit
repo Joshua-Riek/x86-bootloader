@@ -16,7 +16,7 @@
 #  along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #
 
-symbol-file bin/boot16.elf
+symbol-file bin/boot12.elf
 target remote localhost:1234
 
 set confirm off

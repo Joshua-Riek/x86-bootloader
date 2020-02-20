@@ -120,7 +120,7 @@ loadRoot:
     add ax, word [reservedSectors]              ; Increase ax by the reserved sectors
 
     mov word [userData], ax                     ; start of user data = startOfRoot + numberOfRoot
-    mov word [userData], cx                     ; Therefore, just add the size and location of the root directory
+    add word [userData], cx                     ; Therefore, just add the size and location of the root directory
     
     mov di, BUFFER_SEG                          ; Set the extra segment to the disk buffer
     mov es, di
@@ -134,8 +134,9 @@ loadRoot:
 findFile:
     mov cx, word [rootDirEntries]               ; Search through all of the root dir entrys for the kernel
     xor ax, ax                                  ; Clear ax for the file entry offset
-
-  searchRoot:
+    
+searchRoot:
+    cld
     xchg cx, dx                                 ; Save current cx value to look for the filename
     mov si, filename                            ; Load the filename
     mov cx, 11                                  ; Compare first 11 bytes
@@ -191,11 +192,6 @@ loadFile:
     mov di, LOAD_SEG
     mov es, di                                  ; Set es:di to where the file will load
     mov di, LOAD_OFF
-    
-    xor ax, ax                                  ; Size of fat = (fats * fatSectors)
-    mov al, byte [fats]                         ; Move number of fats into al
-    mul word [fatSectors]                       ; Move fat sectors into bx
-    mov cx, ax                                  ; Store in cx
 
     pop ax                                      ; File cluster restored
     call readClusters                           ; Read clusters from the file
@@ -413,13 +409,13 @@ print:
 ; Bootloader varables below
 ;---------------------------------------------------
 
-    diskError      db "Disk err", 0             ; Error while reading from the disk
-    fileNotFound   db "File err", 0             ; File was not found
+    diskError      db "Disk error!", 0         ; Error while reading from the disk
+    fileNotFound   db "File error!", 0         ; File was not found
     
     userData       dw 0                         ; Start of the data sectors
     drive          db 0                         ; Boot drive number
 
-    filename       db "DEMO    BIN"             ; Filename
+    filename       db "KERNEL  BIN"             ; Filename
 
                    times 510 - ($ - $$) db 0    ; Pad remainder of boot sector with zeros
                    dw 0xaa55                    ; Boot signature
