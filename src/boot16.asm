@@ -226,6 +226,7 @@ readClusters:
 
   .clusterLoop:
     push ax
+    
     dec ax
     dec ax
     xor dx, dx
@@ -237,6 +238,8 @@ readClusters:
     xor ch, ch
     mov cl, byte [sectorsPerCluster]            ; Sectors to read
     call readSectors                            ; Read the sectors
+
+    xor dx, dx
     pop ax                                      ; Current cluster number
 
   .calculateNextCluster16:                      ; Get the next cluster for FAT16 (cluster * 2)
@@ -244,12 +247,12 @@ readClusters:
     mul bx
 
   .loadNextCluster:
-    push ds
-    push si
+    push es
+    push di
 
-    mov si, BUFFER_SEG
-    mov ds, si                                  ; Tempararly set es:di to the FAT16 buffer
-    mov si, BUFFER_OFF
+    mov di, BUFFER_SEG
+    mov es, di                                  ; Tempararly set es:di to the FAT16 buffer
+    mov di, BUFFER_OFF
 
     clc
     xor cx, cx
@@ -265,10 +268,10 @@ readClusters:
     add dh, cl                                  ; Now we can set the correct segment into the FAT16 table
     mov es, dx
 
-    mov ax, word [ds:si]                        ; Load ax to the next cluster in the FAT16 table
+    mov ax, word [es:di]                        ; Load ax to the next cluster in the FAT16 table
     
-    pop si
-    pop ds
+    pop di
+    pop es
 
   .nextClusterCalculated:
     cmp ax, 0xfff8                              ; Are we at the end of the file?
