@@ -69,6 +69,7 @@
 ;---------------------------------------------------
 ; Start of the main bootloader code and entry point
 ;---------------------------------------------------
+global entryPoint    
 entryPoint:
     jmp BOOT_SEG:$+5                            ; Fix the cs:ip registers
     

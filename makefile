@@ -36,8 +36,8 @@ BINDIR        = ./bin
 CFLAGS       +=
 LDFLAGS      +=
 ARFLAGS      +=
-LDFLAGS      += -m elf_i386 -Ttext=0x7c00
-NASMFLAGS    += -f elf -g3 -F dwarf
+LDFLAGS      += -e entryPoint -m elf_i386 -Ttext=0x7c00
+NASMFLAGS    += -O0 -f elf -g3 -F dwarf
 OBJCOPYFLAGS += -O binary
 
 # Disk image file
@@ -109,7 +109,7 @@ clobber: clean
 
 
 # Write the bootloader to a disk image
-install:
+install: 
 	$(DD) if=$(BINDIR)/boot12.bin of=floppy.img bs=1 skip=62 seek=62
 
 # Run the disk image
