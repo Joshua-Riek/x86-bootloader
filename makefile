@@ -112,6 +112,10 @@ clobber: clean
 install: 
 	$(DD) if=$(BINDIR)/boot12.bin of=floppy.img bs=1 skip=62 seek=62
 
+# Write the bootloader to a disk image
+install-boot16: 
+	$(DD) if=$(BINDIR)/boot16.bin of=floppy.img bs=1 skip=62 seek=62
+
 # Run the disk image
 run:
 	$(QEMU) -fda $(DISKIMG)
