@@ -17,12 +17,12 @@
 #
 
 # Build tools
-CC           ?= gcc
-LD           ?= ld
-AR           ?= ar
-NASM         ?= nasm
-OBJCOPY      ?= objcopy
-DD           ?= dd
+CC           := i686-elf-gcc
+LD           := i686-elf-ld
+AR           := i686-elf-ar
+NASM         := nasm
+OBJCOPY      := objcopy
+DD           := dd
 
 # Other tools
 QEMU         ?= qemu-system-i386
@@ -43,13 +43,8 @@ OBJCOPYFLAGS += -O binary
 # Disk image file
 DISKIMG       = floppy.img
 
-
 # NOTE: Using DD from MinGW seems to work better for me
-# For Windows compatibility (using a i686-elf cross-compiler)
 ifeq ($(OS), Windows_NT)
-  CC         := i686-elf-gcc
-  LD         := i686-elf-ld
-  AR         := i686-elf-ar
   DD         := D:\Compilers\MinGW\bin\dd
 endif
 

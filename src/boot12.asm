@@ -260,10 +260,8 @@ readClusters:
     jz .evenCluster
 
   .oddCluster:
-    shr ax, 1                                   ; Drop the first 4 bits of the next cluster
-    shr ax, 1
-    shr ax, 1
-    shr ax, 1
+    mov cl, 4                                   ; Drop the first 4 bits of the next cluster
+    shr ax, cl
     jmp .nextClusterCalculated
 
   .evenCluster:
@@ -332,12 +330,10 @@ readSectors:
     mov dh, dl                                  ; Move the absolute head into dh
     
     mov ch, al                                  ; Low 8 bits of absolute track
-    shl ah, 1                                   ; High 2 bits of absolute track
-    shl ah, 1
-    shl ah, 1
-    shl ah, 1
-    shl ah, 1
-    shl ah, 1
+    push cx
+    mov cl, 6                                   ; High 2 bits of absolute track
+    shl ah, cl
+    pop cx
     or cl, ah                                   ; Now cx is set with respective track and sector numbers
 
     mov dl, byte [drive]                        ; Set correct drive for int 13h
@@ -409,13 +405,13 @@ print:
 ; Bootloader varables below
 ;---------------------------------------------------
 
-    diskError      db "Disk error!", 0         ; Error while reading from the disk
-    fileNotFound   db "File error!", 0         ; File was not found
+    diskError      db "Disk error!", 0          ; Error while reading from the disk
+    fileNotFound   db "File error!", 0          ; File was not found
     
     userData       dw 0                         ; Start of the data sectors
     drive          db 0                         ; Boot drive number
 
-    filename       db "KERNEL  BIN"             ; Filename
+    filename       db "DEMO    BIN"             ; Filename
 
                    times 510 - ($ - $$) db 0    ; Pad remainder of boot sector with zeros
                    dw 0xaa55                    ; Boot signature
