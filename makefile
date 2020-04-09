@@ -37,7 +37,7 @@ CFLAGS       +=
 LDFLAGS      +=
 ARFLAGS      +=
 LDFLAGS      += -e entryPoint -m elf_i386 -Ttext=0x7c00
-NASMFLAGS    += -O0 -f elf -g3 -F dwarf
+NASMFLAGS    += -f elf -g3 -F dwarf
 OBJCOPYFLAGS += -O binary
 
 # Disk image file
@@ -54,7 +54,7 @@ endif
 
 
 # Rule to make targets
-all: boot12 boot16 demo
+all: boot12 boot16 boot12_v2 boot16_v2 demo
 
 
 # Makefile target for the FAT12 bootloader
@@ -81,6 +81,20 @@ $(BINDIR)/boot16.elf: $(OBJDIR)/boot16.o | $(BINDIR)
 
 $(OBJDIR)/boot16.o: $(SRCDIR)/boot16.asm | $(OBJDIR)
 	$(NASM) $^ $(NASMFLAGS) -o $@
+
+
+# Makefile target for the FAT12 bootloader v2
+boot12_v2: $(BINDIR)/boot12_v2.bin
+
+$(BINDIR)/boot12_v2.bin: $(SRCDIR)/boot12_v2.asm | $(OBJDIR)
+	$(NASM) $^ -f bin -o $@
+
+
+# Makefile target for the FAT16 bootloader v2
+boot16_v2: $(BINDIR)/boot16_v2.bin
+
+$(BINDIR)/boot16_v2.bin: $(SRCDIR)/boot16_v2.asm | $(OBJDIR)
+	$(NASM) $^ -f bin -o $@
 
 
 # Makefile target for the demo file
