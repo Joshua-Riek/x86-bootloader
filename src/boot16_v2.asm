@@ -98,6 +98,9 @@ realEntry:
 
     mov byte [drive], dl                        ; Save boot device number
 
+    xor di, di                                  ; To guard against BIOS bugs
+    mov es, di                                  ; http://www.ctyme.com/intr/rb-0621.htm
+
     mov ah, 0x08                                ; Get Drive Parameters func of int 13h
     int 0x13                                    ; Call int 13h (BIOS disk I/O)
     jc loadRoot

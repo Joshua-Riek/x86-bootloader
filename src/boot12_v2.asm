@@ -101,6 +101,9 @@ realEntry:
 
     mov byte [drive], dl                        ; Save boot device number
 
+    xor di, di                                  ; To guard against BIOS bugs
+    mov es, di                                  ; http://www.ctyme.com/intr/rb-0621.htm
+
     mov ah, 0x08                                ; Get Drive Parameters func of int 13h
     int 0x13                                    ; Call int 13h (BIOS disk I/O)
     jc loadRoot
@@ -429,8 +432,8 @@ print:
 ; Bootloader varables below
 ;---------------------------------------------------
 
-    diskError      db "Disk err", 0             ; Error while reading from the disk
-    fileNotFound   db "File err", 0             ; File was not found
+    diskError      db "Disk error!", 0             ; Error while reading from the disk
+    fileNotFound   db "File error!", 0             ; File was not found
     
     userData       dw 0                         ; Start of the data sectors
     drive          db 0                         ; Boot drive number
