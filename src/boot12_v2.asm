@@ -17,8 +17,10 @@
 ;  along with this program.  If not, see <http://www.gnu.org/licenses/>.
 ;
 
-    %define LOAD_SEG   0x0000                   ; (LOAD_SEG   << 4) + LOAD_OFF   = 0x001000
-    %define LOAD_OFF   0x1000
+    %define LOAD_ADDR   0x001000                ; Physical load address (where the program loads)
+
+    %define LOAD_SEG    (LOAD_ADDR >> 4)        ; (LOAD_SEG   << 4) + LOAD_OFF   = LOAD_ADDR
+    %define LOAD_OFF    (LOAD_ADDR & 0xf)
     
     bits 16                                     ; Ensure 16-bit code
     cpu  8086                                   ; Assemble with the 8086 instruction set
@@ -82,7 +84,7 @@ entryPoint:
 
     push es                                     ; The new Code Segment
     push ax                                     ; The new Instruction Pointer
-    retf                                        ; Far jump to the loaded program!
+    retf                                        ; Far jump to the reallocated boot sector! 
 
 ;---------------------------------------------------
 ; Jump here after allocating the boot sector
@@ -112,7 +114,7 @@ realEntry:
     mov word [heads], dx                        ; Save the head number
 
 ;---------------------------------------------------
-; Reserve memory for the disk buffer and FAT (256kb max)
+; Reserve memory for the disk buffer and FAT (16kb max)
 ;---------------------------------------------------
 
 allocDiskbuffer:

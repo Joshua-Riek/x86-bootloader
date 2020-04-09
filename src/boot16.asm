@@ -17,17 +17,25 @@
 ;  along with this program.  If not, see <http://www.gnu.org/licenses/>.
 ;
 
-    %define BOOT_SEG   0x07c0                   ; (BOOT_SEG  << 4)  + BOOT_OFF   = 0x007c00
-    %define BOOT_OFF   0x0000
-    
-    %define STACK_SEG  0x0600                   ; (STACK_SEG  << 4) + STACK_OFF  = 0x007000
-    %define STACK_OFF  0x1000
+    %define BOOT_ADDR   0x007c00                ; Physical boot address
 
-    %define BUFFER_SEG 0x1000                   ; (BUFFER_SEG << 4) + BUFFER_OFF = 0x010000
-    %define BUFFER_OFF 0x0000
+    %define BOOT_SEG    (BOOT_ADDR >> 4)        ; (BOOT_SEG  << 4)  + BOOT_OFF   = BOOT_ADDR
+    %define BOOT_OFF    (BOOT_ADDR & 0xf)
 
-    %define LOAD_SEG   0x0000                   ; (LOAD_SEG   << 4) + LOAD_OFF   = 0x001000
-    %define LOAD_OFF   0x1000
+    %define STACK_ADDR  0x007000                ; Physical stack address
+
+    %define STACK_SEG   (STACK_ADDR >> 4)       ; (STACK_SEG  << 4) + STACK_OFF  = STACK_ADDR
+    %define STACK_OFF   (STACK_ADDR & 0xf)
+
+    %define BUFFER_ADDR 0x010000                ; Physical buffer address
+
+    %define BUFFER_SEG  (BUFFER_ADDR >> 4)      ; (BUFFER_SEG << 4) + BUFFER_OFF = BUFFER_ADDR
+    %define BUFFER_OFF  (BUFFER_ADDR & 0xf)
+
+    %define LOAD_ADDR   0x001000                ; Physical load address
+
+    %define LOAD_SEG    (LOAD_ADDR >> 4)        ; (LOAD_SEG   << 4) + LOAD_OFF   = LOAD_ADDR
+    %define LOAD_OFF    (LOAD_ADDR & 0xf)
 
     %ifidn __OUTPUT_FORMAT__, elf               ; WARNING: Assumes that the text segment is set to
       %define BOOT_SEG 0x0000                   ; 0x7c00, used ONLY for debugging with GDB
