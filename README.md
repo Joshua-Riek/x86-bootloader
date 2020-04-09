@@ -15,13 +15,13 @@ File Allocation Table (FAT) into memory; therefore, leaving approximately
 272KB of conventional memory for loading your program or kernel (assuming 
 at least 1mb of ram).
 
-Both [boot12.asm] and [boot16.asm] require a few pre-defined varables to be set
+Both `boot12.asm` and `boot16.asm` require a few pre-defined varables to be set
 before use. These varables are *BOOT_ADDR*, *STACK_ADDR*, *BUFFER_ADDR*, and 
 *LOAD_ADDR*. Leaving them at the default values should be fine, except for 
 when loading a program that is more than ~24KB or if the disk is using a large
 cluster size such as 32KB, as it will overlap into the bootloader and stack.
 
-While [boot12_v2.asm] and [boot16_v2.asm] reallocate themselves to the top
+While `boot12_v2.asm` and `boot16_v2.asm` reallocate themselves to the top
 of converntional memory, allocate space for the stack and File Allocation 
 Table (FAT). Then finally searching for and load the program at the 
 physical address specified by *LOAD_ADDR*. This code is inspired by 
