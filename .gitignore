@@ -5,3 +5,5 @@
 /bin/**
 *.bin
 *.elf
+*.img
+floppy.img
