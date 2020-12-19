@@ -122,13 +122,25 @@ clobber: clean
 	rm -f $(SRCDIR)/*~ $(SRCDIR)\#*\#
 
 
-# Write the bootloader to a disk image
-install: 
+# Default rule to intall the bootloader
+install: install-boot12_v2
+
+# Write the FAT12 bootloader to a disk image
+install-boot12: 
 	$(DD) if=$(BINDIR)/boot12.bin of=floppy.img bs=1 skip=62 seek=62
 
-# Write the bootloader to a disk image
+# Write the FAT12 bootloader v2 to a disk image
+install-boot12_v2: 
+	$(DD) if=$(BINDIR)/boot12_v2.bin of=floppy.img bs=1 skip=62 seek=62
+
+# Write the FAT16 bootloader to a disk image
 install-boot16: 
 	$(DD) if=$(BINDIR)/boot16.bin of=floppy.img bs=1 skip=62 seek=62
+
+# Write the FAT16 bootloader to a disk image
+install-boot16_v2: 
+	$(DD) if=$(BINDIR)/boot16_v2.bin of=floppy.img bs=1 skip=62 seek=62
+
 
 # Run the disk image
 run:

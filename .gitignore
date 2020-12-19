@@ -6,4 +6,5 @@
 *.bin
 *.elf
 *.img
-floppy.img
+*~
+
