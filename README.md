@@ -17,27 +17,20 @@ at least 1mb of ram).
 
 Both `boot12.asm` and `boot16.asm` reallocate themselves to the top
 of conventional memory, allocate space for the stack and File Allocation 
-Table (FAT). Then finally searching for and load the program at the 
+Table (FAT). Then finally searching for and loading the program at the 
 physical address specified by *LOAD_ADDR*.
 
 ## Requirements
 
-To install QEMU click [here](https://www.qemu.org/download/), or type:
+Please install the packages below, or type:
 ```
-$ sudo apt-get install qemu
-```
-
-To install Nasm click [here](https://www.nasm.us/pub/nasm/releasebuilds/2.14.02/), or type:
-```
-$ sudo apt-get install nasm
+$ sudo apt-get install nasm qemu dosfstools build-essential
 ```
 
-As for getting yourself an i686-elf cross-compiler you can click 
+This project also uses an i686-elf cross-compiler, you can click 
 [here](https://wiki.osdev.org/GCC_Cross-Compiler) for more information 
 on compiling it yourself, or just use some precompiled binaries 
-[here](https://github.com/lordmilko/i686-elf-tools/releases). Lastly, 
-if you are using Windows, please download a port of [dd](http://www.chrysocome.net/dd) 
-for installing the bootsector to the floppy disk image.
+[here](https://github.com/lordmilko/i686-elf-tools/releases).
 
 ## Building
 
@@ -60,10 +53,11 @@ objcopy bin/boot16.elf -O binary bin/boot16.bin
 nasm src/demo.asm -f bin -o bin/demo.bin
 ```
 
-To build without a cross-compiller:
+To build without the i686-elf cross-compiller:
 ```
 $ nasm src/boot12.asm -f bin -o bin/boot12.bin
 $ nasm src/boot16.asm -f bin -o bin/boot16.bin
+$ nasm src/demo.asm -f bin -o bin/demo.bin
 ```
 
 ## Installing
@@ -98,8 +92,6 @@ dd if=./bin/boot16.bin of=./bin/boot16.img bs=1 skip=62 seek=62 conv=notrunc sta
 
 [boot12.asm]:    src/boot12.asm
 [boot16.asm]:    src/boot16.asm
-[boot12_v2.asm]: src/boot12_v2.asm
-[boot16_v2.asm]: src/boot16_v2.asm
 [13h]:           http://webpages.charter.net/danrollins/techhelp/0185.HTM
 [02h]:           http://webpages.charter.net/danrollins/techhelp/0188.HTM
 [42h]:           https://wiki.osdev.org/ATA_in_x86_RealMode_(BIOS)
