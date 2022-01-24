@@ -1,7 +1,7 @@
 ;  demo.asm
 ;
 ;  This is just a demo file for the bootloader.  
-;  Copyright (c) 2017-2020, Joshua Riek
+;  Copyright (c) 2017-2022, Joshua Riek
 ;
 ;  This program is free software: you can redistribute it and/or modify
 ;  it under the terms of the GNU General Public License as published by
@@ -42,7 +42,7 @@ demo:
 
     xor ax, ax
     int 0x16                                    ; Get a single keypress
-    
+
     xor bx, bx
     mov ah, 0x0e                                ; Teletype output
     mov al, 0x0d                                ; Carriage return
@@ -51,8 +51,8 @@ demo:
     int 0x10                                    ; Video interupt
     mov al, 0x0a                                ; Line feed
     int 0x10                                    ; Video interupt
-    
+
     xor ax, ax
     int 0x19                                    ; Reboot the system
-    
+
     hlt

@@ -1,6 +1,6 @@
 #  makefile
 #
-#  Copyright (c) 2017-2020, Joshua Riek
+#  Copyright (c) 2017-2022, Joshua Riek
 #
 #  This program is free software: you can redistribute it and/or modify
 #  it under the terms of the GNU General Public License as published by
@@ -36,25 +36,17 @@ BINDIR        = ./bin
 CFLAGS       +=
 LDFLAGS      +=
 ARFLAGS      +=
-LDFLAGS      += -e entryPoint -m elf_i386 -Ttext=0x7c00
+LDFLAGS      += -m elf_i386 -Ttext=0x0000
 NASMFLAGS    += -f elf -g3 -F dwarf
 OBJCOPYFLAGS += -O binary
 
-# Disk image file
-DISKIMG       = floppy.img
-
-# NOTE: Using DD from MinGW seems to work better for me
-ifeq ($(OS), Windows_NT)
-  DD         := D:\Compilers\MinGW\bin\dd
-endif
-
 
 # Set phony targets
-.PHONY: all clean clobber run debug install boot12 boot16 demo
+.PHONY: all clean clobber run debug install
 
 
 # Rule to make targets
-all: boot12 boot16 boot12_v2 boot16_v2 demo
+all: boot12 boot16 demo
 
 
 # Makefile target for the FAT12 bootloader
@@ -83,25 +75,47 @@ $(OBJDIR)/boot16.o: $(SRCDIR)/boot16.asm | $(OBJDIR)
 	$(NASM) $^ $(NASMFLAGS) -o $@
 
 
-# Makefile target for the FAT12 bootloader v2
-boot12_v2: $(BINDIR)/boot12_v2.bin
-
-$(BINDIR)/boot12_v2.bin: $(SRCDIR)/boot12_v2.asm | $(OBJDIR)
-	$(NASM) $^ -f bin -o $@
-
-
-# Makefile target for the FAT16 bootloader v2
-boot16_v2: $(BINDIR)/boot16_v2.bin
-
-$(BINDIR)/boot16_v2.bin: $(SRCDIR)/boot16_v2.asm | $(OBJDIR)
-	$(NASM) $^ -f bin -o $@
-
-
 # Makefile target for the demo file
 demo: $(BINDIR)/demo.bin
 
 $(BINDIR)/demo.bin: $(SRCDIR)/demo.asm | $(OBJDIR)
 	$(NASM) $^ -f bin -o $@
+
+
+# Default rule to intall the bootloader
+install: boot12-install boot16-install
+
+
+# Write the FAT12 bootloader to a disk image
+boot12-install: $(BINDIR)/boot12.img 
+
+$(BINDIR)/boot12.img: $(BINDIR)/boot12.bin $(BINDIR)/demo.bin
+	dd if=/dev/zero of=$@ bs=1024 count=1440 status=none
+	mkfs.vfat -F12 $@
+
+	sudo umount -f /mnt/tmp > /dev/null 2>&1 || true 
+	sudo mkdir -p /mnt/tmp
+	sudo mount $@ /mnt/tmp
+	sudo cp $(BINDIR)/demo.bin /mnt/tmp
+	sudo umount -f /mnt/tmp
+
+	dd if=$(BINDIR)/boot12.bin of=$(BINDIR)/boot12.img bs=1 skip=62 seek=62 conv=notrunc status=none
+
+
+# Write the FAT12 bootloader to a disk image
+boot16-install: $(BINDIR)/boot16.img
+
+$(BINDIR)/boot16.img: $(BINDIR)/boot16.bin $(BINDIR)/demo.bin
+	dd if=/dev/zero of=$@ bs=1024 count=16384 status=none
+	mkfs.vfat -F16 $@
+
+	sudo umount -f /mnt/tmp > /dev/null 2>&1 || true 
+	sudo mkdir -p /mnt/tmp
+	sudo mount $@ /mnt/tmp
+	sudo cp $(BINDIR)/demo.bin /mnt/tmp
+	sudo umount -f /mnt/tmp
+
+	dd if=$(BINDIR)/boot16.bin of=$(BINDIR)/boot16.img bs=1 skip=62 seek=62 conv=notrunc status=none
 
 
 # Create the obj dir
@@ -122,30 +136,10 @@ clobber: clean
 	rm -f $(SRCDIR)/*~ $(SRCDIR)\#*\#
 
 
-# Default rule to intall the bootloader
-install: install-boot12_v2
-
-# Write the FAT12 bootloader to a disk image
-install-boot12: 
-	$(DD) if=$(BINDIR)/boot12.bin of=floppy.img bs=1 skip=62 seek=62
-
-# Write the FAT12 bootloader v2 to a disk image
-install-boot12_v2: 
-	$(DD) if=$(BINDIR)/boot12_v2.bin of=floppy.img bs=1 skip=62 seek=62
-
-# Write the FAT16 bootloader to a disk image
-install-boot16: 
-	$(DD) if=$(BINDIR)/boot16.bin of=floppy.img bs=1 skip=62 seek=62
-
-# Write the FAT16 bootloader to a disk image
-install-boot16_v2: 
-	$(DD) if=$(BINDIR)/boot16_v2.bin of=floppy.img bs=1 skip=62 seek=62
-
-
 # Run the disk image
 run:
-	$(QEMU) -fda $(DISKIMG)
+	$(QEMU) -hda  $(BINDIR)/boot16.img
 
 # Start a debug session with qemu
 debug:
-	$(QEMU) -S -s -fda $(DISKIMG)
+	$(QEMU) -S -s -hda $(DISKIMG)

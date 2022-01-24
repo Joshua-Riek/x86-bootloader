@@ -1,6 +1,6 @@
 #  .gdbinit
 #
-#  Copyright (c) 2017-2020, Joshua Riek
+#  Copyright (c) 2017-2022, Joshua Riek
 #
 #  This program is free software: you can redistribute it and/or modify
 #  it under the terms of the GNU General Public License as published by
@@ -16,7 +16,11 @@
 #  along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #
 
-symbol-file bin/boot12.elf
+exec-file bin/boot12.elf
+add-symbol-file bin/boot12.elf 0x9FA00 -readnow
+b realEntry
+set tdesc filename target.xml
+
 target remote localhost:1234
 
 set confirm off

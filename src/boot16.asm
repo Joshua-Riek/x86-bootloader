@@ -1,7 +1,7 @@
 ;  boot16.asm
 ;
 ;  This program is a FAT16 bootloader
-;  Copyright (c) 2017-2020, Joshua Riek
+;  Copyright (c) 2017-2022, Joshua Riek
 ;
 ;  This program is free software: you can redistribute it and/or modify
 ;  it under the terms of the GNU General Public License as published by
@@ -17,30 +17,10 @@
 ;  along with this program.  If not, see <http://www.gnu.org/licenses/>.
 ;
 
-    %define BOOT_ADDR   0x007c00                ; Physical boot address
-
-    %define BOOT_SEG    (BOOT_ADDR >> 4)        ; (BOOT_SEG  << 4)  + BOOT_OFF   = BOOT_ADDR
-    %define BOOT_OFF    (BOOT_ADDR & 0xf)
-
-    %define STACK_ADDR  0x007000                ; Physical stack address
-
-    %define STACK_SEG   (STACK_ADDR >> 4)       ; (STACK_SEG  << 4) + STACK_OFF  = STACK_ADDR
-    %define STACK_OFF   (STACK_ADDR & 0xf)
-
-    %define BUFFER_ADDR 0x010000                ; Physical buffer address
-
-    %define BUFFER_SEG  (BUFFER_ADDR >> 4)      ; (BUFFER_SEG << 4) + BUFFER_OFF = BUFFER_ADDR
-    %define BUFFER_OFF  (BUFFER_ADDR & 0xf)
-
-    %define LOAD_ADDR   0x001000                ; Physical load address
+    %define LOAD_ADDR   0x001000                ; Physical load address (where the program loads)
 
     %define LOAD_SEG    (LOAD_ADDR >> 4)        ; (LOAD_SEG   << 4) + LOAD_OFF   = LOAD_ADDR
     %define LOAD_OFF    (LOAD_ADDR & 0xf)
-
-    %ifidn __OUTPUT_FORMAT__, elf               ; WARNING: Assumes that the text segment is set to
-      %define BOOT_SEG 0x0000                   ; 0x7c00, used ONLY for debugging with GDB
-      %define BOOT_OFF 0x0000
-    %endif
     
     bits 16                                     ; Ensure 16-bit code
     cpu  8086                                   ; Assemble with the 8086 instruction set
@@ -49,7 +29,7 @@
 ; Disk description table
 ;---------------------------------------------------
 
-    jmp short entryPoint                        ; Jump over OEM / BIOS param block
+    jmp short _start                            ; Jump over OEM / BIOS param block
     nop
 
     %define OEMName           bp+0x03           ; Disk label
@@ -77,29 +57,49 @@
 ;---------------------------------------------------
 ; Start of the main bootloader code and entry point
 ;---------------------------------------------------
-global entryPoint    
-entryPoint:
-    jmp BOOT_SEG:$+5                            ; Fix the cs:ip registers
+global _start
+_start:
+    cld
+
+    int 0x12                                    ; Get Conventional memory size in kb
     
-bootStrap:
-    mov ax, BOOT_SEG                            ; Set segments to the location of the bootloader
-    mov ds, ax
-    mov es, ax
+    mov cl, 6                                   ; Shift bits left (ax*(2^6))
+    shl ax, cl                                  ; Convert the memory to 16-byte paragraphs
+
+    sub ax, 512 >> 4                            ; Reserve 512 bytes for the boot sector
+    mov es, ax                                  ; Set the segment register to the new boot sector location
+    xor di, di                                  ; Now es:di points to the new bs
+
+    mov ds, di                                  ; Set the segment register to the current boot sector location
+    mov si, 0x7c00                              ; Now ds:si points to the current bs
     
-    cli
-    mov ax, STACK_SEG                           ; Get the the defined stack segment address
-    mov ss, ax                                  ; Set segment register to the bottom  of the stack
-    mov sp, STACK_OFF                           ; Set ss:sp to the top of the 4k stack
-    sti
-    
-    mov bp, (0x7c0-STACK_SEG) << 4              ; Correct bp for the disk description table
+    sub ax, 4096 >> 4                           ; Reserve 4k bytes for the stack 
+    mov ss, ax                                  ; Set segment register to the bottom of the stack
+    mov sp, 4096                                ; Now ss:sp points to the top of the 4k stack
+
+    mov cx, 256                                 ; 256 words (512 bytes)
+    rep movsw                                   ; Copy cx times from ds:si to es:di
+
+    mov ax, reallocatedEntry                    ; Now we want to jump to this label
+
+    push es                                     ; The new Code Segment
+    push ax                                     ; The new Instruction Pointer
+    retf                                        ; Far jump to the reallocated boot sector! 
+
+;---------------------------------------------------
+; Jump here after allocating the boot sector
+;---------------------------------------------------
+
+reallocatedEntry:
     push cs
     pop ds
-    
-    or dl, dl                                   ; When booting from a hard drive, some of the 
-    jz loadRoot                                 ; you need to call int 13h to fix some bpb entries
+
+    mov bp, sp                                  ; Correct bp for the disk description table
 
     mov byte [drive], dl                        ; Save boot device number
+
+    xor di, di                                  ; To guard against BIOS bugs
+    mov es, di                                  ; http://www.ctyme.com/intr/rb-0621.htm
 
     mov ah, 0x08                                ; Get Drive Parameters func of int 13h
     int 0x13                                    ; Call int 13h (BIOS disk I/O)
@@ -114,58 +114,77 @@ bootStrap:
     mov word [heads], dx                        ; Save the head number
 
 ;---------------------------------------------------
+; Reserve memory for the disk buffer and FAT (256kb max)
+;---------------------------------------------------
+
+allocDiskbuffer:
+
+    xor ax, ax                                  ; Size of fat = (fats * fatSectors)
+    mov dx, ax
+    mov al, byte [fats]                         ; Move number of fats into al
+    mul word [fatSectors]                       ; Move fat sectors into bx
+
+    push ax                                     ; Save the size of the fat in sectors for later 
+    push ax                                     ; Save it again to calculate the starting sector of the root dir
+
+    mov bx, [bytesPerSector]                    ; Get the size of fat in 16-byte paragraphs
+    mov cl, 4                                   ; Shift bits left (ax*(2^4))
+    shr bx, cl                                  ; Align to 16-byte paragraphs
+    mul bx
+
+    mov di, ss                                  ; Allocate space after the stack
+    sub di, ax                                  ; Reserve (ax*(2^4)) bytes for the disk buffer 
+    
+    mov es, di                                  ; Set the segment register to the disk buffer location
+    xor di, di                                  ; Now es:di points to the allocated disk buffer 
+
+;---------------------------------------------------
 ; Load the root directory from the disk
 ;---------------------------------------------------
 
 loadRoot:
-    xor cx, cx
-    mov ax, 32                                  ; Size of root dir = (rootDirEntries * 32) / bytesPerSector
+    pop cx
+    add cx, word [reservedSectors]              ; Increase cx by the reserved sectors
+
+    mov ax, 32
+    xor dx, dx                                  ; Size of root dir = (rootDirEntries * 32) / bytesPerSector
     mul word [rootDirEntries]                   ; Multiply by the total size of the root directory
     div word [bytesPerSector]                   ; Divided by the number of bytes used per sector
     xchg cx, ax
-        
-    mov al, byte [fats]                         ; Location of root dir = (fats * fatSectors) + reservedSectors
-    mul word [fatSectors]                       ; Multiply by the sectors used
-    add ax, word [reservedSectors]              ; Increase ax by the reserved sectors
 
     mov word [userData], ax                     ; start of user data = startOfRoot + numberOfRoot
     add word [userData], cx                     ; Therefore, just add the size and location of the root directory
 
     xor dx, dx
-    
-    mov di, BUFFER_SEG                          ; Set the extra segment to the disk buffer
-    mov es, di
-    mov di, BUFFER_OFF                          ; Set es:di and load the root directory into the disk buffer
-    call readSectors                            ; Read the sectors
-   
+    call readSectors                            ; Load the root directory into the disk buffer
+
 ;---------------------------------------------------
 ; Find the file to load from the loaded root dir
 ;---------------------------------------------------
-    
+
 findFile:
-    mov cx, word [rootDirEntries]               ; Search through all of the root dir entrys for the kernel
-    xor ax, ax                                  ; Clear ax for the file entry offset
+    mov dx, word [rootDirEntries]               ; Search through all of the root dir entrys for the kernel
+    push di
 
   searchRoot:
-    xchg cx, dx                                 ; Save current cx value to look for the filename
+    push di
     mov si, filename                            ; Load the filename
     mov cx, 11                                  ; Compare first 11 bytes
     rep cmpsb                                   ; Compare si and di cx times
+    pop di
     je loadFat                                  ; We found the file :)
 
-    add ax, 32                                  ; File entry offset
-    mov di, BUFFER_OFF                          ; Point back to the start of the entry
-    add di, ax                                  ; Add the offset to point to the next entry
-    xchg dx, cx
-    loop searchRoot                             ; Continue to search for the file
+    add di, 32                                  ; Point to the next entry
+    dec dx                                      ; Continue to search for the file
+    jnz searchRoot
 
-    mov si, fileNotFound                        ; Could not find the file
+    mov si, errorMsg                        ; Could not find the file
     call print
 
   reboot:
     xor ax, ax
     int 0x16                                    ; Get a single keypress
-    
+
     mov ah, 0x0e                                ; Teletype output
     mov al, 0x0d                                ; Carriage return
     int 0x10                                    ; Video interupt
@@ -175,31 +194,33 @@ findFile:
 
     xor ax, ax
     int 0x19                                    ; Reboot the system
-    
+
 ;---------------------------------------------------
 ; Load the fat from the found file   
 ;--------------------------------------------------
 
 loadFat:
-    mov ax, word [es:di+15]                     ; Get the file cluster at offset 26
-    push ax                                     ; Store the FAT cluster
+    mov bx, word [es:di+26]                     ; Get the file cluster at offset 26
 
-    xor ax, ax                                  ; Size of fat = (fats * fatSectors)
-    mov al, byte [fats]                         ; Move number of fats into al
-    mul word [fatSectors]                       ; Move fat sectors into bx
-    mov cx, ax                                  ; Store in cx
-    
+    pop di                                      ; Offset into disk buffer
+    pop cx                                      ; Size of fat in sectors
+
+    push bx                                     ; Store the fat cluster
+
     xor dx, dx
-
     mov ax, word [reservedSectors]              ; Convert the first fat on the disk
-    mov di, BUFFER_OFF                          ; Set es:di and load the fat sectors into the disk buffer
-    call readSectors                            ; Read the sectors
+    call readSectors                            ; load the fat sectors into the disk buffer
 
 ;---------------------------------------------------
 ; Load the clusters of the file and jump to it
 ;---------------------------------------------------
-    
+
 loadFile: 
+    push di                                     ; I dont like the way i made this, but
+    push es                                     ; the readClusters func needs ds:si to 
+    pop ds                                      ; be set with the disk buffer/ loaded fat
+    pop si
+
     mov di, LOAD_SEG
     mov es, di                                  ; Set es:di to where the file will load
     mov di, LOAD_OFF
@@ -207,7 +228,7 @@ loadFile:
     pop ax                                      ; File cluster restored
     call readClusters                           ; Read clusters from the file
 
-    mov dl, byte [drive]                        ; Pass the boot drive into dl
+    mov dl, byte [cs:drive]                     ; Pass the boot drive into dl
     jmp LOAD_SEG:LOAD_OFF                       ; Jump to the file loaded!
 
     hlt                                         ; This should never be hit 
@@ -217,29 +238,30 @@ loadFile:
 ; Bootloader routines below
 ;---------------------------------------------------
 
-    
+
 ;---------------------------------------------------
 readClusters:
 ;
 ; Read file clusters, starting at the given cluster,
 ; expects FAT to be loaded into the disk buffer.
 ;
-; Expects: AX    = Starting cluster
+; Expects: DS:SI = Location of FAT
 ;          ES:DI = Location to load clusters
+;          AX    = Starting cluster
 ;
 ; Returns: None
 ;
 ;--------------------------------------------------
   .clusterLoop:
     push ax
-    
+
     dec ax
     dec ax
     xor dx, dx
     xor bh, bh                                  ; Get the cluster start = (cluster - 2) * sectorsPerCluster + userData
     mov bl, byte [sectorsPerCluster]            ; Sectors per cluster is a byte value
     mul bx                                      ; Multiply (cluster - 2) * sectorsPerCluster
-    add ax, word [userData]                     ; Add the userData
+    add ax, word [cs:userData]                  ; Add the userData
 
     xor ch, ch
     mov cl, byte [sectorsPerCluster]            ; Sectors to read
@@ -248,21 +270,16 @@ readClusters:
     xor dx, dx
     pop ax                                      ; Current cluster number
 
-  .calculateNextCluster16:                      ; Get the next cluster for FAT16 (cluster * 2)
+  .calculateNextCluster:                        ; Get the next cluster for FAT16 (cluster * 2)
     mov bx, 2                                   ; Multiply the cluster by two (cluster is in ax)
     mul bx
 
   .loadNextCluster:
-    push es
-    push di
+    push ds
+    push si
 
-    mov di, BUFFER_SEG
-    mov es, di                                  ; Tempararly set es:di to the FAT16 buffer
-    mov di, BUFFER_OFF
-
-    clc
     xor cx, cx
-    add di, ax                                  ; Add the offset into the FAT16 table
+    add si, ax                                  ; Add the offset into the FAT16 table
     adc cx, dx                                  ; Add and carry the segment into the FAT16 table
 
     shl cl, 1                                   ; Shift left 4 bits for the segment 
@@ -270,14 +287,14 @@ readClusters:
     shl cl, 1
     shl cl, 1
 
-    mov dx, es
+    mov dx, ds
     add dh, cl                                  ; Now we can set the correct segment into the FAT16 table
-    mov es, dx
+    mov ds, dx
 
-    mov ax, word [es:di]                        ; Load ax to the next cluster in the FAT16 table
-    
-    pop di
-    pop es
+    mov ax, word [ds:si]                        ; Load ax to the next cluster in the FAT16 table
+
+    pop si
+    pop ds
 
   .nextClusterCalculated:
     cmp ax, 0xfff8                              ; Are we at the end of the file?
@@ -290,7 +307,7 @@ readClusters:
     mov bl, byte [sectorsPerCluster]
     mul bx
     xchg cx, ax
-    
+
     clc
     add di, cx                                  ; Add to the pointer offset
     jnc .clusterLoop 
@@ -304,13 +321,13 @@ readClusters:
 
   .done:
     ret
-  
+
 ;---------------------------------------------------
 readSectors:
 ;
 ; Read sectors starting at a given sector by 
 ; the given times and load into a buffer. Please
-; note that this may allocate up to 256KB of ram.
+; note that this may allocate up to 128KB of ram.
 ;
 ; Expects: AX:DX = Starting sector/ lba
 ;          ES:DI = Location to load sectors
@@ -325,16 +342,14 @@ readSectors:
     push dx
     push di
     push es
-    
+
     mov bx, di                                  ; Convert es:di to es:bx for int 13h
 
   .sectorLoop:
     push ax
     push cx
     push dx
-    
-    ;xor dx, dx                                 ; This allows us to access even more sectors!
-    
+
     div word [sectorsPerTrack]                  ; Divide the lba (value in ax:dx) by sectorsPerTrack
     mov cx, dx                                  ; Save the absolute sector value 
     inc cx
@@ -342,7 +357,7 @@ readSectors:
     xor dx, dx                                  ; Divide by the number of heads
     div word [heads]                            ; to get absolute head and track values
     mov dh, dl                                  ; Move the absolute head into dh
-    
+
     mov ch, al                                  ; Low 8 bits of absolute track
     push cx
     mov cl, 6                                   ; High 2 bits of absolute track
@@ -350,10 +365,10 @@ readSectors:
     pop cx
     or cl, ah                                   ; Now cx is set with respective track and sector numbers
 
-    mov dl, byte [drive]                        ; Set correct drive for int 13h
+    mov dl, byte [cs:drive]                     ; Set correct drive for int 13h
 
     mov di, 5                                   ; Try five times to read the sector
-    
+
   .attemptRead:
     mov ax, 0x0201                              ; Read Sectors func of int 13h, read one sector
     int 0x13                                    ; Call int 13h (BIOS disk I/O)
@@ -361,14 +376,17 @@ readSectors:
 
     xor ah, ah                                  ; Reset Drive func of int 13h
     int 0x13                                    ; Call int 13h (BIOS disk I/O)
-    
+
     dec di                                      ; Decrease read attempt counter
     jnz .attemptRead                            ; Try to read the sector again
 
-    mov si, diskError                           ; Error reading the disk
+    push cs
+    pop ds
+
+    mov si, errorMsg                           ; Error reading the disk
     call print
     jmp reboot
-    
+
   .readOk:
     pop dx
     pop cx
@@ -376,7 +394,7 @@ readSectors:
 
     inc ax                                      ; Increase the next sector to read
     add bx, word [bytesPerSector]               ; Add to the buffer address for the next sector
-    
+
     jnc .nextSector 
 
   .fixBuffer:
@@ -385,10 +403,10 @@ readSectors:
     add dh, 0x10                                ; it will trigger the carry flag, so correct
     mov es, dx                                  ; es segment by 0x1000
     pop dx
-    
+
   .nextSector:
     loop .sectorLoop
-    
+
     pop es
     pop di
     pop dx
@@ -417,17 +435,16 @@ print:
   .done:
     ret
 
-    
+
 ;---------------------------------------------------
 ; Bootloader varables below
 ;---------------------------------------------------
 
-    diskError      db "Disk error!", 0             ; Error while reading from the disk
-    fileNotFound   db "File error!", 0             ; File was not found
-    
+    errorMsg       db "Disk/File error", 0      ; Error reading disk or file was not found
+
     userData       dw 0                         ; Start of the data sectors
     drive          db 0                         ; Boot drive number
-    
+
     filename       db "DEMO    BIN"             ; Filename
 
                    times 510 - ($ - $$) db 0    ; Pad remainder of boot sector with zeros
