@@ -80,7 +80,6 @@ dd if=/dev/zero of=bin/boot12.img bs=1024 count=1440 status=none
 mkfs.vfat -F12 bin/boot12.img
 mkfs.fat 4.1 (2017-01-24)
 sudo umount -f /mnt/tmp > /dev/null 2>&1 || true 
-[sudo] password for joshua: 
 sudo mkdir -p /mnt/tmp
 sudo mount bin/boot12.img /mnt/tmp
 sudo cp ./bin/demo.bin /mnt/tmp
