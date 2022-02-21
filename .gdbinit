@@ -18,7 +18,7 @@
 
 exec-file bin/boot12.elf
 add-symbol-file bin/boot12.elf 0x9FA00 -readnow
-b realEntry
+b reallocatedEntry
 set tdesc filename target.xml
 
 target remote localhost:1234

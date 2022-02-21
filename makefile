@@ -78,44 +78,24 @@ $(OBJDIR)/boot16.o: $(SRCDIR)/boot16.asm | $(OBJDIR)
 # Makefile target for the demo file
 demo: $(BINDIR)/demo.bin
 
-$(BINDIR)/demo.bin: $(SRCDIR)/demo.asm | $(OBJDIR)
+$(BINDIR)/demo.bin: $(SRCDIR)/demo.asm | $(BINDIR)
 	$(NASM) $^ -f bin -o $@
 
 
-# Default rule to intall the bootloader
-install: boot12-install boot16-install
-
-
-# Write the FAT12 bootloader to a disk image
-boot12-install: $(BINDIR)/boot12.img 
+# Makefile target to create both bootloader disk images
+install: $(BINDIR)/boot12.img $(BINDIR)/boot16.img
 
 $(BINDIR)/boot12.img: $(BINDIR)/boot12.bin $(BINDIR)/demo.bin
 	dd if=/dev/zero of=$@ bs=1024 count=1440 status=none
-	mkfs.vfat -F12 $@
-
-	sudo umount -f /mnt/tmp > /dev/null 2>&1 || true 
-	sudo mkdir -p /mnt/tmp
-	sudo mount $@ /mnt/tmp
-	sudo cp $(BINDIR)/demo.bin /mnt/tmp
-	sudo umount -f /mnt/tmp
-
-	dd if=$(BINDIR)/boot12.bin of=$(BINDIR)/boot12.img bs=1 skip=62 seek=62 conv=notrunc status=none
-
-
-# Write the FAT12 bootloader to a disk image
-boot16-install: $(BINDIR)/boot16.img
+	mkfs.vfat -F12 $@ 1> /dev/null
+	mcopy -n -i $@ $(BINDIR)/demo.bin ::
+	dd if=$< of=$@ bs=1 skip=62 seek=62 conv=notrunc status=none
 
 $(BINDIR)/boot16.img: $(BINDIR)/boot16.bin $(BINDIR)/demo.bin
 	dd if=/dev/zero of=$@ bs=1024 count=16384 status=none
-	mkfs.vfat -F16 $@
-
-	sudo umount -f /mnt/tmp > /dev/null 2>&1 || true 
-	sudo mkdir -p /mnt/tmp
-	sudo mount $@ /mnt/tmp
-	sudo cp $(BINDIR)/demo.bin /mnt/tmp
-	sudo umount -f /mnt/tmp
-
-	dd if=$(BINDIR)/boot16.bin of=$(BINDIR)/boot16.img bs=1 skip=62 seek=62 conv=notrunc status=none
+	mkfs.vfat -F16 $@ 1> /dev/null
+	mcopy -i $@ $(BINDIR)/demo.bin ::
+	dd if=$< of=$@ bs=1 skip=62 seek=62 conv=notrunc status=none
 
 
 # Create the obj dir
@@ -138,8 +118,8 @@ clobber: clean
 
 # Run the disk image
 run:
-	$(QEMU) -hda  $(BINDIR)/boot16.img
+	$(QEMU) -fda  $(BINDIR)/boot12.img
 
 # Start a debug session with qemu
 debug:
-	$(QEMU) -S -s -hda $(DISKIMG)
+	$(QEMU) -S -s -hda $(BINDIR)/boot12.img

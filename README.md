@@ -24,7 +24,7 @@ physical address specified by *LOAD_ADDR*.
 
 Please install the packages below, or type:
 ```
-$ sudo apt-get install nasm qemu dosfstools build-essential
+$ sudo apt-get install nasm qemu dosfstools mtools build-essential
 ```
 
 This project also uses an i686-elf cross-compiler, you can click 
@@ -71,23 +71,13 @@ A successful install should look like:
 ```
 $ make install
 dd if=/dev/zero of=bin/boot12.img bs=1024 count=1440 status=none
-mkfs.vfat -F12 bin/boot12.img
-mkfs.fat 4.1 (2017-01-24)
-sudo umount -f /mnt/tmp > /dev/null 2>&1 || true 
-sudo mkdir -p /mnt/tmp
-sudo mount bin/boot12.img /mnt/tmp
-sudo cp ./bin/demo.bin /mnt/tmp
-sudo umount -f /mnt/tmp
-dd if=./bin/boot12.bin of=./bin/boot12.img bs=1 skip=62 seek=62 conv=notrunc status=none
+mkfs.vfat -F12 bin/boot12.img 1> /dev/null
+mcopy -n -i bin/boot12.img ./bin/demo.bin ::
+dd if=bin/boot12.bin of=bin/boot12.img bs=1 skip=62 seek=62 conv=notrunc status=none
 dd if=/dev/zero of=bin/boot16.img bs=1024 count=16384 status=none
-mkfs.vfat -F16 bin/boot16.img
-mkfs.fat 4.1 (2017-01-24)
-sudo umount -f /mnt/tmp > /dev/null 2>&1 || true 
-sudo mkdir -p /mnt/tmp
-sudo mount bin/boot16.img /mnt/tmp
-sudo cp ./bin/demo.bin /mnt/tmp
-sudo umount -f /mnt/tmp
-dd if=./bin/boot16.bin of=./bin/boot16.img bs=1 skip=62 seek=62 conv=notrunc status=none
+mkfs.vfat -F16 bin/boot16.img 1> /dev/null
+mcopy -i bin/boot16.img ./bin/demo.bin ::
+dd if=bin/boot16.bin of=bin/boot16.img bs=1 skip=62 seek=62 conv=notrunc status=none
 ```
 
 [boot12.asm]:    src/boot12.asm
