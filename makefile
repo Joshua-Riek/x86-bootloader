@@ -22,7 +22,6 @@ LD           := i686-elf-ld
 AR           := i686-elf-ar
 NASM         := nasm
 OBJCOPY      := objcopy
-DD           := dd
 
 # Other tools
 QEMU         ?= qemu-system-i386
@@ -42,15 +41,24 @@ OBJCOPYFLAGS += -O binary
 
 
 # Set phony targets
-.PHONY: all clean clobber run debug install
+.PHONY: all clean clobber demo bootloader image debug run
 
 
 # Rule to make targets
-all: boot12 boot16 demo
+all: bootloader demo image
 
 
-# Makefile target for the FAT12 bootloader
-boot12: $(BINDIR)/boot12.bin
+# Makefile target for both bootloaders
+ifeq (, $(shell which $(LD)))
+bootloader: $(BINDIR)/boot12.bin $(BINDIR)/boot16.bin
+
+$(BINDIR)/boot12.bin: $(SRCDIR)/boot12.asm | $(BINDIR)
+	$(NASM) $^ -f bin -o $@
+
+$(BINDIR)/boot16.bin: $(SRCDIR)/boot16.asm | $(BINDIR)
+	$(NASM) $^ -f bin -o $@
+else
+bootloader: $(BINDIR)/boot12.bin $(BINDIR)/boot16.bin
 
 $(BINDIR)/boot12.bin: $(BINDIR)/boot12.elf
 	$(OBJCOPY) $^ $(OBJCOPYFLAGS) $@
@@ -61,10 +69,6 @@ $(BINDIR)/boot12.elf: $(OBJDIR)/boot12.o | $(BINDIR)
 $(OBJDIR)/boot12.o: $(SRCDIR)/boot12.asm | $(OBJDIR)
 	$(NASM) $^ $(NASMFLAGS) -o $@
 
-
-# Makefile target for the FAT16 bootloader
-boot16: $(BINDIR)/boot16.bin
-
 $(BINDIR)/boot16.bin: $(BINDIR)/boot16.elf
 	$(OBJCOPY) $^ $(OBJCOPYFLAGS) $@
 
@@ -73,6 +77,7 @@ $(BINDIR)/boot16.elf: $(OBJDIR)/boot16.o | $(BINDIR)
 
 $(OBJDIR)/boot16.o: $(SRCDIR)/boot16.asm | $(OBJDIR)
 	$(NASM) $^ $(NASMFLAGS) -o $@
+endif
 
 
 # Makefile target for the demo file
@@ -82,8 +87,8 @@ $(BINDIR)/demo.bin: $(SRCDIR)/demo.asm | $(BINDIR)
 	$(NASM) $^ -f bin -o $@
 
 
-# Makefile target to create both bootloader disk images
-install: $(BINDIR)/boot12.img $(BINDIR)/boot16.img
+# Makefile target to create both disk images
+image: $(BINDIR)/boot12.img $(BINDIR)/boot16.img
 
 $(BINDIR)/boot12.img: $(BINDIR)/boot12.bin $(BINDIR)/demo.bin
 	dd if=/dev/zero of=$@ bs=1024 count=1440 status=none
@@ -109,17 +114,24 @@ $(BINDIR):
 
 # Clean produced files
 clean:
-	rm -f $(OBJDIR)/* $(OBJDIR)/* $(BINDIR)/*
+	rm -f $(OBJDIR)/* $(BINDIR)/*
 
 # Clean files from emacs
 clobber: clean
-	rm -f $(SRCDIR)/*~ $(SRCDIR)\#*\#
+	rm -f $(SRCDIR)/*~ $(SRCDIR)\#*\# ./*~
 
 
-# Run the disk image
-run:
-	$(QEMU) -fda  $(BINDIR)/boot12.img
+# Makefile target to run or debug both disk images
+ifeq ($(FS), FAT16)
+run: image
+	$(QEMU) -serial stdio -rtc base=localtime -drive file=bin/boot16.img,format=raw
 
-# Start a debug session with qemu
-debug:
-	$(QEMU) -S -s -hda $(BINDIR)/boot12.img
+debug: image
+	$(QEMU) -serial stdio -rtc base=localtime -S -s -drive file=bin/boot16.img,format=raw
+else
+run: image
+	$(QEMU) -serial stdio -rtc base=localtime -drive file=bin/boot12.img,format=raw,if=floppy
+
+debug: image
+	$(QEMU) -serial stdio -rtc base=localtime -S -s -drive file=bin/boot12.img,format=raw,if=floppy
+endif
