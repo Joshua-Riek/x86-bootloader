@@ -16,9 +16,6 @@
 #  along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #
 
-exec-file bin/boot12.elf
-add-symbol-file bin/boot12.elf 0x9FA00 -readnow
-b reallocatedEntry
 set tdesc filename target.xml
 
 target remote localhost:1234
@@ -143,23 +140,23 @@ define print_data
         while ($i < $wil)
             printf "%04X %04X: ", ($seg), ($off+ $i * $w)
             set $j = (int)0
-        while ($j < $w)
-            printf "%02X ", *(unsigned char*)($maddr + $i * $w + $j)
-            set $j++
-        end
-        printf " "
-        set $j = (int)0
-        while ($j < $w)
-            set $c = *(unsigned char*)($maddr + $i * $w + $j)
-            if ($c > 32) && ($c < 128)
-                printf "%c", $c
-            else
-                printf "."
+            while ($j < $w)
+                printf "%02X ", *(unsigned char*)($maddr + $i * $w + $j)
+                set $j++
             end
-            set $j++
-        end
-        printf "\n"
-        set $i++
+            printf " "
+            set $j = (int)0
+            while ($j < $w)
+                set $c = *(unsigned char*)($maddr + $i * $w + $j)
+                if ($c > 32) && ($c < 128)
+                    printf "%c", $c
+                else
+                    printf "."
+                end
+                set $j++
+            end
+            printf "\n"
+            set $i++
         end
     end
 end

@@ -20,11 +20,8 @@
 CC           := i686-elf-gcc
 LD           := i686-elf-ld
 AR           := i686-elf-ar
+OBJCOPY      := i686-elf-objcopy
 NASM         := nasm
-OBJCOPY      := objcopy
-
-# Other tools
-QEMU         ?= qemu-system-i386
 
 # Output directory
 SRCDIR        = ./src
@@ -41,7 +38,7 @@ OBJCOPYFLAGS += -O binary
 
 
 # Set phony targets
-.PHONY: all clean clobber demo bootloader image debug run
+.PHONY: all clean clobber demo bootloader image debug run gdb
 
 
 # Rule to make targets
@@ -122,16 +119,22 @@ clobber: clean
 
 
 # Makefile target to run or debug both disk images
-ifeq ($(FS), FAT16)
+ifeq ($(FAT), 16)
 run: image
-	$(QEMU) -serial stdio -rtc base=localtime -drive file=bin/boot16.img,format=raw
+	qemu-system-i386 -serial stdio -rtc base=localtime -drive file=bin/boot16.img,format=raw
 
 debug: image
-	$(QEMU) -serial stdio -rtc base=localtime -S -s -drive file=bin/boot16.img,format=raw
+	qemu-system-i386 -serial stdio -rtc base=localtime -S -s -drive file=bin/boot16.img,format=raw
+
+gdb: image
+	-gdb -q -ex "exec-file bin/boot16.elf" -ex "add-symbol-file bin/boot16.elf 0x9FA00 -readnow" -ex "break reallocatedEntry"
 else
 run: image
-	$(QEMU) -serial stdio -rtc base=localtime -drive file=bin/boot12.img,format=raw,if=floppy
+	qemu-system-i386 -serial stdio -rtc base=localtime -drive file=bin/boot12.img,format=raw,if=floppy
 
 debug: image
-	$(QEMU) -serial stdio -rtc base=localtime -S -s -drive file=bin/boot12.img,format=raw,if=floppy
+	qemu-system-i386 -serial stdio -rtc base=localtime -S -s -drive file=bin/boot12.img,format=raw,if=floppy
+
+gdb: image
+	-gdb -q -ex "exec-file bin/boot12.elf" -ex "add-symbol-file bin/boot12.elf 0x9FA00 -readnow" -ex "b reallocatedEntry"
 endif
