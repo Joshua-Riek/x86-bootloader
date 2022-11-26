@@ -46,7 +46,7 @@ all: bootloader demo image
 
 
 # Makefile target for both bootloaders
-ifeq (, $(shell which $(LD)))
+ifeq ($(and $(shell which $(LD)),$(shell which $(OBJCOPY))),)
 bootloader: $(BINDIR)/boot12.bin $(BINDIR)/boot16.bin
 
 $(BINDIR)/boot12.bin: $(SRCDIR)/boot12.asm | $(BINDIR)
