@@ -30,6 +30,7 @@ set input-radix 0d10
 # These make gdb never pause in its output
 set height 0
 set width 0
+set pagination off
 
 # Intel syntax
 set disassembly-flavor intel
