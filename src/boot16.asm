@@ -57,6 +57,7 @@
 ;---------------------------------------------------
 ; Start of the main bootloader code and entry point
 ;---------------------------------------------------
+
 global _start
 _start:
     cld
@@ -166,7 +167,7 @@ findFile:
     mov dx, word [rootDirEntries]               ; Search through all of the root dir entrys for the kernel
     push di
 
-  searchRoot:
+  .searchRoot:
     push di
     mov si, filename                            ; Load the filename
     mov cx, 11                                  ; Compare first 11 bytes
@@ -176,24 +177,9 @@ findFile:
 
     add di, 32                                  ; Point to the next entry
     dec dx                                      ; Continue to search for the file
-    jnz searchRoot
+    jnz .searchRoot
 
-    mov si, errorMsg                        ; Could not find the file
-    call print
-
-  reboot:
-    xor ax, ax
-    int 0x16                                    ; Get a single keypress
-
-    mov ah, 0x0e                                ; Teletype output
-    mov al, 0x0d                                ; Carriage return
-    int 0x10                                    ; Video interupt
-    mov al, 0x0a                                ; Line feed
-    int 0x10                                    ; Video interupt
-    int 0x10                                    ; Video interupt
-
-    xor ax, ax
-    int 0x19                                    ; Reboot the system
+    jmp error                                   ; Could not find the file
 
 ;---------------------------------------------------
 ; Load the fat from the found file   
@@ -216,15 +202,15 @@ loadFat:
 ;---------------------------------------------------
 
 loadFile: 
-    push di                                     ; I dont like the way i made this, but
-    push es                                     ; the readClusters func needs ds:si to 
-    pop ds                                      ; be set with the disk buffer/ loaded fat
-    pop si
+    push di
+    push es
 
     mov di, LOAD_SEG
     mov es, di                                  ; Set es:di to where the file will load
     mov di, LOAD_OFF
 
+    pop ds
+    pop si                                      ; Location of loaded fat
     pop ax                                      ; File cluster restored
     call readClusters                           ; Read clusters from the file
 
@@ -326,8 +312,7 @@ readClusters:
 readSectors:
 ;
 ; Read sectors starting at a given sector by 
-; the given times and load into a buffer. Please
-; note that this may allocate up to 128KB of ram.
+; the given times and load into a buffer.
 ;
 ; Expects: AX:DX = Starting sector/ lba
 ;          ES:DI = Location to load sectors
@@ -383,9 +368,7 @@ readSectors:
     push cs
     pop ds
 
-    mov si, errorMsg                           ; Error reading the disk
-    call print
-    jmp reboot
+    jmp error                                   ; Error reading the disk
 
   .readOk:
     pop dx
@@ -434,6 +417,36 @@ print:
     jmp print                                   ; Loop untill string is null
   .done:
     ret
+
+
+;---------------------------------------------------
+error:
+;
+; Print out an error message and wait for input
+; before rebooting.
+;
+; Expects: None
+;
+; Returns: None
+;
+;---------------------------------------------------
+    mov si, errorMsg
+    call print
+
+    xor ax, ax
+    int 0x16                                    ; Get a single keypress
+
+    mov ah, 0x0e                                ; Teletype output
+    mov al, 0x0d                                ; Carriage return
+    int 0x10                                    ; Video interupt
+    mov al, 0x0a                                ; Line feed
+    int 0x10                                    ; Video interupt
+    int 0x10                                    ; Video interupt
+
+    xor ax, ax
+    int 0x19                                    ; Reboot the system
+
+    hlt
 
 
 ;---------------------------------------------------
