@@ -1,4 +1,4 @@
-## NASM Bootloader
+## x86 Bootloader
 A collection of small 512 byte programs that are capable of finding, 
 loading, then executing a program on a FAT12/16 formatted floppy or hard disk 
 (including USB and CDs). Typically, this would be used as a boot sector
