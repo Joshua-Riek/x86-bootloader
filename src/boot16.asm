@@ -119,7 +119,6 @@ reallocatedEntry:
 ;---------------------------------------------------
 
 allocDiskbuffer:
-
     xor ax, ax                                  ; Size of fat = (fats * fatSectors)
     mov dx, ax
     mov al, byte [fats]                         ; Move number of fats into al
@@ -191,8 +190,6 @@ loadFat:
     pop di                                      ; Offset into disk buffer
     pop cx                                      ; Size of fat in sectors
 
-    push bx                                     ; Store the fat cluster
-
     xor dx, dx
     mov ax, word [reservedSectors]              ; Convert the first fat on the disk
     call readSectors                            ; load the fat sectors into the disk buffer
@@ -201,21 +198,23 @@ loadFat:
 ; Load the clusters of the file and jump to it
 ;---------------------------------------------------
 
-loadFile: 
-    push di
-    push es
+loadFile:
+    mov si, es
+    mov ds, si                                  ; Set ds:si to the loaded fat
+    mov si, di
 
     mov di, LOAD_SEG
     mov es, di                                  ; Set es:di to where the file will load
     mov di, LOAD_OFF
 
-    pop ds
-    pop si                                      ; Location of loaded fat
-    pop ax                                      ; File cluster restored
+    push es
+    push di                                     ; Push the load addr to the stack 
+
+    mov ax, bx                                  ; File cluster
     call readClusters                           ; Read clusters from the file
 
     mov dl, byte [cs:drive]                     ; Pass the boot drive into dl
-    jmp LOAD_SEG:LOAD_OFF                       ; Jump to the file loaded!
+    retf                                        ; Far jump to the file loaded!
 
     hlt                                         ; This should never be hit 
 
