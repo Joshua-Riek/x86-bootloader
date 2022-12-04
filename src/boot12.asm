@@ -296,6 +296,14 @@ readClusters:
     mul bx
     xchg cx, ax
 
+    push cx
+    mov cl, 4
+    shl dx, cl
+    mov bx, es
+    add bh, dl
+    mov es, bx
+    pop cx
+
     clc
     add di, cx                                  ; Add to the pointer offset
     jnc .clusterLoop 
@@ -456,7 +464,7 @@ error:
 ; Bootloader varables below
 ;---------------------------------------------------
 
-    errorMsg       db "Disk/File error", 0      ; Error reading disk or file was not found
+    errorMsg       db "Error!", 0               ; Error reading disk or file was not found
 
     userData       dw 0                         ; Start of the data sectors
     drive          db 0                         ; Boot drive number

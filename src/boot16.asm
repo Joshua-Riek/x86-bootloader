@@ -287,11 +287,19 @@ readClusters:
 
     xchg cx, ax
     xor dx, dx
-    xor bh, bh                                  ; Bytes per cluster = (bytes per sector * sectors per cluster)
-    mov ax, word [bytesPerSector]
-    mov bl, byte [sectorsPerCluster]
+    xor bh, bh                                  ; Calculate the size in bytes per cluster
+    mov ax, word [bytesPerSector]               ; So, take the bytes per sector
+    mov bl, byte [sectorsPerCluster]            ; and mul that by the sectors per cluster
     mul bx
     xchg cx, ax
+
+    push cx
+    mov cl, 4
+    shl dx, cl
+    mov bx, es
+    add bh, dl
+    mov es, bx
+    pop cx
 
     clc
     add di, cx                                  ; Add to the pointer offset
@@ -452,7 +460,7 @@ error:
 ; Bootloader varables below
 ;---------------------------------------------------
 
-    errorMsg       db "Disk/File error", 0      ; Error reading disk or file was not found
+    errorMsg       db "Error!", 0               ; Error reading disk or file was not found
 
     userData       dw 0                         ; Start of the data sectors
     drive          db 0                         ; Boot drive number
