@@ -115,7 +115,7 @@ reallocatedEntry:
     mov word [heads], dx                        ; Save the head number
 
 ;---------------------------------------------------
-; Reserve memory for the disk buffer and FAT (256kb max)
+; Reserve memory for the disk buffer and FAT (128kb max)
 ;---------------------------------------------------
 
 allocDiskbuffer:
@@ -127,7 +127,7 @@ allocDiskbuffer:
     push ax                                     ; Save the size of the fat in sectors for later 
     push ax                                     ; Save it again to calculate the starting sector of the root dir
 
-    mov bx, [bytesPerSector]                    ; Get the size of fat in 16-byte paragraphs
+    mov bx, word [bytesPerSector]               ; Get the size of fat in 16-byte paragraphs
     mov cl, 4                                   ; Shift bits left (ax*(2^4))
     shr bx, cl                                  ; Align to 16-byte paragraphs
     mul bx
