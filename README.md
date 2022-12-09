@@ -5,15 +5,12 @@ loading, then executing a program on a FAT12/16 formatted floppy or hard disk
 for an operating system, second stage bootloader, or low level kernel.
 
 ## Limitations
+
 Requires an i8086 or better CPU.
 
-The bootloader supports any size up to a maximum of 2GB. This is due to 
-using the BIOS interrupt call [13h] service [02h] in support for older 
-hardware. Please note that when using a hard drive that is 2GB in size, 
-this bootloader may allocate ~256KB of RAM in order to load the entire 
+This bootloader may allocate up to 128KB of RAM in order to load the entire 
 File Allocation Table (FAT) into memory; therefore, leaving approximately 
-272KB of conventional memory for loading your program or kernel (assuming 
-at least 1mb of ram).
+400KB for loading your program or kernel (assuming at least 640KB of conventional memory).
 
 Both `boot12.asm` and `boot16.asm` reallocate themselves to the top
 of conventional memory, allocate space for the stack and File Allocation 
@@ -59,8 +56,3 @@ Open another ternimal and connect to the virtual machine's GDB stub:
 $ make gdb
 ```
 > For debug symbols to be generated, you must compile with an i686-elf cross-compiller.
-
-[13h]:           http://webpages.charter.net/danrollins/techhelp/0185.HTM
-[02h]:           http://webpages.charter.net/danrollins/techhelp/0188.HTM
-[42h]:           https://wiki.osdev.org/ATA_in_x86_RealMode_(BIOS)
-
