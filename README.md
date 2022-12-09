@@ -1,21 +1,20 @@
 ## x86 Bootloader
+
 A collection of small 512 byte programs that are capable of finding, 
 loading, then executing a program on a FAT12/16 formatted floppy or hard disk 
 (including USB and CDs). Typically, this would be used as a boot sector
 for an operating system, second stage bootloader, or low level kernel.
 
-## Limitations
+## Limitations and Implementation Details
 
 Requires an i8086 or better CPU.
 
 This bootloader may allocate up to 128KB of RAM in order to load the entire 
 File Allocation Table (FAT) into memory; therefore, leaving approximately 
-400KB for loading your program or kernel (assuming at least 640KB of conventional memory).
-
-Both `boot12.asm` and `boot16.asm` reallocate themselves to the top
-of conventional memory, allocate space for the stack and File Allocation 
-Table (FAT). Then finally searching for and loading the program at the 
-physical address specified by *LOAD_ADDR*.
+400KB for loading your program or kernel (assuming at least 640KB of available 
+conventional memory). The bootloader will reallocate itself to the top of 
+conventional memory, allocate space for the stack and FAT. Then finally search for and 
+load the program *DEMO.BIN* at the physical address specified by *LOAD_ADDR*.
 
 ## Requirements
 
