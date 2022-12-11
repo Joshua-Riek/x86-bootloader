@@ -119,10 +119,10 @@ reallocatedEntry:
 ;---------------------------------------------------
 
 allocDiskbuffer:
-    xor ax, ax                                  ; Size of fat = (fats * fatSectors)
-    mov dx, ax
-    mov al, byte [fats]                         ; Move number of fats into al
-    mul word [fatSectors]                       ; Move fat sectors into bx
+    xor ax, ax
+    mov dx, ax                                  ; Calculate the size of fat in sectors
+    mov al, byte [fats]                         ; Take the number of fats
+    mul word [fatSectors]                       ; And multiply that by the number of sectors per fat
 
     push ax                                     ; Save the size of the fat in sectors for later 
     push ax                                     ; Save it again to calculate the starting sector of the root dir
@@ -146,14 +146,14 @@ loadRoot:
     pop cx
     add cx, word [reservedSectors]              ; Increase cx by the reserved sectors
 
-    mov ax, 32
-    xor dx, dx                                  ; Size of root dir = (rootDirEntries * 32) / bytesPerSector
-    mul word [rootDirEntries]                   ; Multiply by the total size of the root directory
-    div word [bytesPerSector]                   ; Divided by the number of bytes used per sector
+    xor dx, dx
+    mov ax, 32                                  ; Calculate the size of the root dir in sectors
+    mul word [rootDirEntries]                   ; Multiply the number of root dir entries by 32
+    div word [bytesPerSector]                   ; Divide by the number of bytes used per sector
     xchg cx, ax
 
-    mov word [userData], ax                     ; start of user data = startOfRoot + numberOfRoot
-    add word [userData], cx                     ; Therefore, just add the size and location of the root directory
+    mov word [userData], ax                     ; Calculate the first data sector
+    add word [userData], cx                     ; Just add the size and location of the root dir
 
     xor dx, dx
     call readSectors                            ; Load the root directory into the disk buffer
@@ -243,37 +243,33 @@ readClusters:
     dec ax
     dec ax
     xor dx, dx
-    xor bh, bh                                  ; Get the cluster start = (cluster - 2) * sectorsPerCluster + userData
-    mov bl, byte [sectorsPerCluster]            ; Sectors per cluster is a byte value
-    mul bx                                      ; Multiply (cluster - 2) * sectorsPerCluster
-    add ax, word [cs:userData]                  ; Add the userData
+    xor bh, bh                                  ; Calculate the first sector of the given cluster in ax
+    mov bl, byte [sectorsPerCluster]            ; First subtract 2 from the cluster
+    mul bx                                      ; Multiply the cluster by the sectors per cluster
+    add ax, word [cs:userData]                  ; Finally add the first data sector
 
     xor ch, ch
     mov cl, byte [sectorsPerCluster]            ; Sectors to read
     call readSectors                            ; Read the sectors
 
-    xor dx, dx
-    pop ax                                      ; Current cluster number
-
-  .calculateNextCluster:                        ; Get the next cluster for FAT16 (cluster * 2)
-    mov bx, 2                                   ; Multiply the cluster by two (cluster is in ax)
-    mul bx
+    pop ax
 
   .loadNextCluster:
     push ds
     push si
 
-    xor cx, cx
+    xor dx, dx
+    mov cx, 2                                   ; Get the next cluster for FAT16 
+    mul cx                                      ; Multiply the cluster by 2
+
+    xor bx, bx
     add si, ax                                  ; Add the offset into the FAT16 table
-    adc cx, dx                                  ; Add and carry the segment into the FAT16 table
+    adc bx, dx                                  ; Make sure to adjust for carry 
 
-    shl cl, 1                                   ; Shift left 4 bits for the segment 
-    shl cl, 1
-    shl cl, 1
-    shl cl, 1
-
-    mov dx, ds
-    add dh, cl                                  ; Now we can set the correct segment into the FAT16 table
+    mov cl, 4
+    shl bl, cl                                  ; Correct the segment based on the offset into the FAT16 table
+    mov dx, ds                                  ; Shift left by 4 bits
+    add dh, bl                                  ; Then add the higher half to the segment
     mov ds, dx
 
     mov ax, word [ds:si]                        ; Load ax to the next cluster in the FAT16 table
@@ -285,24 +281,21 @@ readClusters:
     cmp ax, 0xfff8                              ; Are we at the end of the file?
     jae .done
 
-    xchg cx, ax
+    xchg bx, ax
     xor dx, dx
-    xor bh, bh                                  ; Calculate the size in bytes per cluster
-    mov ax, word [bytesPerSector]               ; So, take the bytes per sector
-    mov bl, byte [sectorsPerCluster]            ; and mul that by the sectors per cluster
-    mul bx
-    xchg cx, ax
+    xor ah, ah                                  ; Calculate the size in bytes per cluster
+    mov al, byte [sectorsPerCluster]            ; So, take the sectors per cluster
+    mul word [bytesPerSector]                   ; And mul that by the bytes per sector
+    xchg bx, ax                                 ; Bytes per cluster in bx:dx
 
-    push cx
     mov cl, 4
-    shl dx, cl
-    mov bx, es
-    add bh, dl
-    mov es, bx
-    pop cx
+    shl dx, cl                                  ; Correct the segment offset based on the bytes per cluster
+    mov cx, es                                  ; Shift left by 4 bits
+    add ch, dl                                  ; Then add the lower half to the segment
+    mov es, cx
 
-    clc
-    add di, cx                                  ; Add to the pointer offset
+    clc                                         ; Add to the pointer offset
+    add di, bx
     jnc .clusterLoop 
 
   .fixBuffer:                                   ; An error will occur if the buffer in memory
@@ -382,9 +375,12 @@ readSectors:
     pop cx
     pop ax
 
-    inc ax                                      ; Increase the next sector to read
-    add bx, word [bytesPerSector]               ; Add to the buffer address for the next sector
+    clc
+    add ax, 1                                   ; Add one for the the next lba value
+    adc dx, 0                                   ; Make sure to adjust dx for carry
 
+    clc
+    add bx, word [bytesPerSector]               ; Add to the buffer address for the next sector
     jnc .nextSector 
 
   .fixBuffer:
