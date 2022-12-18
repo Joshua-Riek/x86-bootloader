@@ -155,8 +155,8 @@ loadRoot:
     div word [bytesPerSector]                   ; Divide by the number of bytes used per sector
     xchg cx, ax
 
-    mov word [userData], ax                     ; Calculate the first data sector
-    add word [userData], cx                     ; Just add the size and location of the root dir
+    mov word [startOfData], ax                  ; Calculate the first data sector
+    add word [startOfData], cx                  ; Just add the size and location of the root dir
 
     xor dx, dx
     call readSectors                            ; Load the root directory into the disk buffer
@@ -249,7 +249,7 @@ readClusters:
     xor bh, bh                                  ; Calculate the first sector of the given cluster in ax
     mov bl, byte [sectorsPerCluster]            ; First subtract 2 from the cluster
     mul bx                                      ; Multiply the cluster by the sectors per cluster
-    add ax, word [cs:userData]                  ; Finally add the first data sector
+    add ax, word [cs:startOfData]               ; Finally add the first data sector
 
     xor ch, ch
     mov cl, byte [sectorsPerCluster]            ; Sectors to read
@@ -464,7 +464,7 @@ error:
 
     errorMsg       db "Error!", 0               ; Error reading disk or file was not found
 
-    userData       dw 0                         ; Start of the data sectors
+    startOfData    dw 0                         ; Start of the data sectors
     drive          db 0                         ; Boot drive number
 
     filename       db "DEMO    BIN"             ; Filename
