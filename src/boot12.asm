@@ -319,8 +319,7 @@ readClusters:
 readSectors:
 ;
 ; Read sectors starting at a given sector by 
-; the given times and load into a buffer. Please
-; note that this may allocate up to 128KB of ram.
+; the given times and load into a buffer.
 ;
 ; Expects: AX:DX = Starting sector/ lba
 ;          ES:DI = Location to load sectors
