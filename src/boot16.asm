@@ -119,8 +119,8 @@ reallocatedEntry:
 ;---------------------------------------------------
 
 allocDiskbuffer:
-    xor ax, ax
-    mov dx, ax                                  ; Calculate the size of fat in sectors
+    xor ah, ah
+    mov dx, dx                                  ; Calculate the size of fat in sectors
     mov al, byte [fats]                         ; Take the number of fats
     mul word [fatSectors]                       ; And multiply that by the number of sectors per fat
 
@@ -163,7 +163,7 @@ loadRoot:
 ;---------------------------------------------------
 
 findFile:
-    mov dx, word [rootDirEntries]               ; Search through all of the root dir entrys for the kernel
+    mov dx, word [rootDirEntries]               ; Search through all of the root dir entries for the kernel
     push di
 
   .searchRoot:
@@ -248,8 +248,7 @@ readClusters:
     mul bx                                      ; Multiply the cluster by the sectors per cluster
     add ax, word [cs:startOfData]               ; Finally add the first data sector
 
-    xor ch, ch
-    mov cl, byte [sectorsPerCluster]            ; Sectors to read
+    mov cx, bx                                  ; Sectors to read
     call readSectors                            ; Read the sectors
 
     pop ax
@@ -259,20 +258,20 @@ readClusters:
     push si
 
     xor dx, dx
-    mov cx, 2                                   ; Get the next cluster for FAT16 
+    mov cx, 2                                   ; Get the next cluster for fat 
     mul cx                                      ; Multiply the cluster by 2
 
     xor bx, bx
-    add si, ax                                  ; Add the offset into the FAT16 table
+    add si, ax                                  ; Add the offset into the fat table
     adc bx, dx                                  ; Make sure to adjust for carry 
 
     mov cl, 4
-    shl bl, cl                                  ; Correct the segment based on the offset into the FAT16 table
+    shl bl, cl                                  ; Correct the segment based on the offset into the fat table
     mov dx, ds                                  ; Shift left by 4 bits
     add dh, bl                                  ; Then add the higher half to the segment
     mov ds, dx
 
-    mov ax, word [ds:si]                        ; Load ax to the next cluster in the FAT16 table
+    mov ax, word [ds:si]                        ; Load ax to the next cluster in the fat table
 
     pop si
     pop ds
@@ -335,7 +334,7 @@ readSectors:
     push cx
     push dx
 
-    div word [sectorsPerTrack]                  ; Divide the lba (value in ax:dx) by sectorsPerTrack
+    div word [sectorsPerTrack]                  ; Divide lba by the sectors per track
     mov cx, dx                                  ; Save the absolute sector value 
     inc cx
 

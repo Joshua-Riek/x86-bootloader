@@ -136,5 +136,5 @@ debug: image
 	qemu-system-i386 -serial stdio -rtc base=localtime -S -s -drive file=bin/boot12.img,format=raw,if=floppy
 
 gdb: image
-	-gdb -q -ex "exec-file bin/boot12.elf" -ex "add-symbol-file bin/boot12.elf 0x9FA00 -readnow" -ex "b reallocatedEntry"
+	-gdb -q -ex "exec-file bin/boot12.elf" -ex "add-symbol-file bin/boot12.elf 0x9FA00 -readnow" -ex "break reallocatedEntry"
 endif
