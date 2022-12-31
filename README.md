@@ -20,7 +20,7 @@ load the program *DEMO.BIN* at the physical address specified by *LOAD_ADDR*.
 
 Please install the packages below, or type:
 ```
-$ sudo apt-get install gdb nasm qemu dosfstools mtools
+sudo apt-get install gdb nasm qemu dosfstools mtools
 ```
 > This project uses an optional i686-elf cross-compiler, you can click 
 [here](https://wiki.osdev.org/GCC_Cross-Compiler) for more 
@@ -31,27 +31,27 @@ information on compiling it yourself, or use some precompiled binaries
 
 To checkout the source and build:
 ```
-$ git clone https://github.com/Joshua-Riek/x86-bootloader
-$ cd x86-bootloader
-$ make
+git clone https://github.com/Joshua-Riek/x86-bootloader
+cd x86-bootloader
+make
 ```
 
 ## Virtual Machine
 
 To run the bootloader in a virtual machine:
 ```
-$ make run
+make run
 ```
 
 ## Virtual Machine Debugging
 
 Start a virtual machine with a GDB stub:
 ```
-$ make debug
+make debug
 ```
 
 Open another ternimal and connect to the virtual machine's GDB stub:
 ```
-$ make gdb
+make gdb
 ```
 > For debug symbols to be generated, you must compile with an i686-elf cross-compiller.
