@@ -1,7 +1,7 @@
 ;  boot16.asm
 ;
 ;  This program is a FAT16 bootloader
-;  Copyright (c) 2017-2022, Joshua Riek
+;  Copyright (c) 2017-2023, Joshua Riek
 ;
 ;  This program is free software: you can redistribute it and/or modify
 ;  it under the terms of the GNU General Public License as published by
