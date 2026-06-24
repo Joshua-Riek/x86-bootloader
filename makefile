@@ -47,7 +47,7 @@ all: bootloader demo image
 
 # Makefile target for both bootloaders
 ifeq ($(and $(shell which $(LD)),$(shell which $(OBJCOPY))),)
-bootloader: $(BINDIR)/boot12.bin $(BINDIR)/boot16.bin
+bootloader: $(BINDIR)/boot12.bin $(BINDIR)/boot16.bin $(BINDIR)/boot32.bin
 
 $(BINDIR)/boot12.bin: $(SRCDIR)/boot12.asm | $(BINDIR)
 	$(NASM) $^ -f bin -o $@
@@ -74,6 +74,15 @@ $(BINDIR)/boot16.elf: $(OBJDIR)/boot16.o | $(BINDIR)
 
 $(OBJDIR)/boot16.o: $(SRCDIR)/boot16.asm | $(OBJDIR)
 	$(NASM) $^ $(NASMFLAGS) -o $@
+
+$(BINDIR)/boot32.bin: $(BINDIR)/boot32.elf
+	$(OBJCOPY) $^ $(OBJCOPYFLAGS) $@
+
+$(BINDIR)/boot32.elf: $(OBJDIR)/boot32.o | $(BINDIR)
+	$(LD) $^ $(LDFLAGS) -o $@
+
+$(OBJDIR)/boot32.o: $(SRCDIR)/boot32.asm | $(OBJDIR)
+	$(NASM) $^ $(NASMFLAGS) -o $@
 endif
 
 
@@ -85,7 +94,7 @@ $(BINDIR)/demo.bin: $(SRCDIR)/demo.asm | $(BINDIR)
 
 
 # Makefile target to create both disk images
-image: $(BINDIR)/boot12.img $(BINDIR)/boot16.img
+image: $(BINDIR)/boot12.img $(BINDIR)/boot16.img $(BINDIR)/boot32.img
 
 $(BINDIR)/boot12.img: $(BINDIR)/boot12.bin $(BINDIR)/demo.bin
 	dd if=/dev/zero of=$@ bs=1024 count=1440 status=none
@@ -96,6 +105,12 @@ $(BINDIR)/boot12.img: $(BINDIR)/boot12.bin $(BINDIR)/demo.bin
 $(BINDIR)/boot16.img: $(BINDIR)/boot16.bin $(BINDIR)/demo.bin
 	dd if=/dev/zero of=$@ bs=1024 count=16384 status=none
 	mkfs.vfat -F16 $@ 1> /dev/null
+	mcopy -i $@ $(BINDIR)/demo.bin ::
+	dd if=$< of=$@ bs=1 skip=62 seek=62 conv=notrunc status=none
+
+$(BINDIR)/boot32.img: $(BINDIR)/boot32.bin $(BINDIR)/demo.bin
+	dd if=/dev/zero of=$@ bs=1024 count=65536 status=none
+	mkfs.vfat -F32 $@ 1> /dev/null
 	mcopy -i $@ $(BINDIR)/demo.bin ::
 	dd if=$< of=$@ bs=1 skip=62 seek=62 conv=notrunc status=none
 
@@ -130,11 +145,11 @@ gdb: image
 	-gdb -q -ex "exec-file bin/boot16.elf" -ex "add-symbol-file bin/boot16.elf 0x9FA00 -readnow" -ex "break reallocatedEntry"
 else
 run: image
-	qemu-system-i386 -serial stdio -rtc base=localtime -drive file=bin/boot12.img,format=raw,if=floppy
+	qemu-system-i386 -serial stdio -rtc base=localtime -drive file=bin/boot32.img,format=raw
 
 debug: image
-	qemu-system-i386 -serial stdio -rtc base=localtime -S -s -drive file=bin/boot12.img,format=raw,if=floppy
+	qemu-system-i386 -serial stdio -rtc base=localtime -S -s -drive file=bin/boot32.img,format=raw
 
 gdb: image
-	-gdb -q -ex "exec-file bin/boot12.elf" -ex "add-symbol-file bin/boot12.elf 0x9FA00 -readnow" -ex "break reallocatedEntry"
+	-gdb -q -ex "exec-file bin/boot32.elf" -ex "add-symbol-file bin/boot32.elf 0x9FA00 -readnow" -ex "break reallocatedEntry"
 endif
