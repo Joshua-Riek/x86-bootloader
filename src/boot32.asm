@@ -123,24 +123,6 @@ reallocatedEntry:
     mov word [heads], dx                        ; Save the head number
 
 ;---------------------------------------------------
-; Reserve memory for the disk buffer and FAT (128kb max)
-;---------------------------------------------------
-
-allocDiskbuffer:
-    xor dx, dx                                  ; Location of the data area
-    mov ax, [tableSize32]
-    mov bx, word [bytesPerSector]               ; Get the size of fat in 16-byte paragraphs
-    mov cl, 4                                   ; Shift bits left (ax*(2^4))
-    shr bx, cl                                  ; Align to 16-byte paragraphs
-    mul bx
-
-    mov di, ss                                  ; Allocate space after the stack
-    sub di, ax                                  ; Reserve (ax*(2^4)) bytes for the disk buffer 
-    
-    mov es, di                                  ; Set the segment register to the disk buffer location
-    xor di, di                                  ; Now es:di points to the allocated disk buffer 
-
-;---------------------------------------------------
 ; Load the root directory from the disk
 ;---------------------------------------------------
 
@@ -160,6 +142,9 @@ loadRoot:
     mul cx
     add ax, word [startOfData]
 
+    mov di, LOAD_SEG
+    mov es, di
+    mov di, LOAD_OFF
     call readSectors                            ; Load the root directory into the disk buffer
 
 ;---------------------------------------------------
@@ -189,11 +174,11 @@ findFile:
 ;--------------------------------------------------
 
 loadFat:
-    mov ax, word [es:di+26]                     ; Get the file cluster at offset 26
     pop di
+    mov dx, word [es:di+20]                     ; Get the high bits of file cluster
+    mov ax, word [es:di+26]                     ; Get the file cluster at offset 26
 
-    xor dx, dx                                  ; Convert FAT cluster into LBA
-    sub ax, 0x0002
+    sub ax, 0x0002                              ; Convert FAT cluster into LBA
     xor cx, cx
     mov cl, byte [sectorsPerCluster]
     mul cx
